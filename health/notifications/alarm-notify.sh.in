@@ -1372,7 +1372,7 @@ send_alerta() {
 		resource=$chart
 		event=$name
 	else
-		resource="${host}:${family}"
+		resource="${host}"
 		event="${chart}.${name}"
 	fi
 
@@ -1384,7 +1384,7 @@ send_alerta() {
             "event": "${event}",
             "environment": "${channel}",
             "severity": "${severity}",
-            "service": ["Netdata"],
+            "service": ["Netdata Host"],
             "group": "Performance",
             "value": "${value_string}",
             "text": "${info}",
