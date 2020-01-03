@@ -34,8 +34,8 @@ apk add --no-cache \
     libuv-dev \
     lz4-dev \
     openssl-dev \
-    snappy \
-    protobuf \
+    snappy-dev \
+    protobuf-dev \
     || exit 1
 
 # Judy doesnt seem to be available on the repositories, download manually and install it
