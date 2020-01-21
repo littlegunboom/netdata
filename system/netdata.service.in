@@ -18,7 +18,9 @@ ExecStartPre=/bin/chown -R netdata:netdata @localstatedir_POST@/cache/netdata
 ExecStartPre=/bin/mkdir -p @localstatedir_POST@/run/netdata
 ExecStartPre=/bin/chown -R netdata:netdata @localstatedir_POST@/run/netdata
 # support magic ip so statsd can be used within container network
-ExecStartPre=/bin/bash -c 'ping -c 1 169.254.254.254 -w 1 || ip addr add 169.254.254.254/32 dev $(awk \'$2 == 00000000 { print $1 }\' /proc/net/route)'
+# ExecStartPre=/bin/bash -c 'ping -c 1 169.254.254.254 -w 1 || ip addr add 169.254.254.254/32 dev $(awk \'$2 == 00000000 { print $1 }\' /proc/net/route)'
+ExecStartPre=/bin/bash -c 'ip link add netdata type dummy || echo "inf already present"; ip addr add 169.254.254.254/32 dev netdata || echo "ip addr already present"'
+ExecStopPost=/bin/bash -c 'ip addr del 169.254.254.254/32 dev netdata || ip addr del 169.254.254.254/32  dev $(awk \'$2 == 00000000 { print $1 }\' /proc/net/route) || echo "unable clean up if addr" ; ip link del netdata || echo "unable clean up vinf"'
 #ExecStopPost=/bin/rm @localstatedir_POST@/run/netdata/netdata.pid
 PermissionsStartOnly=true
 

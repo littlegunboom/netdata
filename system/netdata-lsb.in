@@ -44,8 +44,9 @@ service_start() {
 	if [ ! -d $PIDFILE_PATH ]; then
 		mkdir -p $PIDFILE_PATH
 	fi
-	
+
 	log_daemon_msg "Starting real-time performance monitoring" "netdata"
+	ip link add netdata type dummy || echo "inf already present"; ip addr add 169.254.254.254/32 dev netdata || echo "ip addr already present"
 	start_daemon -p $PIDFILE $DAEMON_PATH/$DAEMON $DAEMONOPTS
 	RETVAL=$?
 	log_end_msg $RETVAL
@@ -61,6 +62,7 @@ service_stop() {
 	if [ $RETVAL -eq 0 ]; then
 		rm -f ${PIDFILE}
 	fi
+	ip addr del 169.254.254.254/32 dev netdata || echo "unable clean up if addr" ; ip link del netdata || echo "unable clean up vinf"
 	return $RETVAL
 }
 

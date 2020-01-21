@@ -28,6 +28,7 @@ service_start()
 	[ -x $DAEMON_PATH ] || exit 5
 	[ ! -d $PIDFILE_PATH ] && mkdir -p $PIDFILE_PATH
 	echo -n "Starting $DAEMON..."
+	ip link add netdata type dummy || echo "inf already present"; ip addr add 169.254.254.254/32 dev netdata || echo "ip addr already present"
 	daemon $DAEMON_PATH/$DAEMON $DAEMONOPTS
 	RETVAL=$?
 	echo
@@ -42,6 +43,7 @@ service_stop()
 	RETVAL=$?
 	echo
 	[ $RETVAL -eq 0 ] && rm -f ${PIDFILE} ${LOCKFILE}
+	ip addr del 169.254.254.254/32 dev netdata || echo "unable clean up if addr" ; ip link del netdata || echo "unable clean up vinf"
 	return $RETVAL
 }
 
