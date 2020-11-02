@@ -18,6 +18,11 @@ if [ "${VERSION}" == "" ]; then
     exit 1
 fi
 
+if [ ${NETDATA_BUILD_WITH_DEBUG} -eq 1 ]
+then
+    VERSION="${VERSION}-debug"
+fi
+
 # -----------------------------------------------------------------------------
 # copy the files needed by makeself installation
 
