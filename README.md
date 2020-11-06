@@ -1,3 +1,14 @@
+Agora fork version of Netdata
+
+# How to build & release
+
+1. commit & tag: git tag -a -m 'agora release' agora20110501
+2. make release with debug symbol: ./packaging/makeself/build-x86_64-static.sh debug
+3. upload tarball to aliyun oss https://oss.console.aliyun.com/bucket/oss-cn-beijing/agora-devops-public-2/object?path=release%2F
+
+
+---
+
 # Netdata [![Build Status](https://travis-ci.com/netdata/netdata.svg?branch=master)](https://travis-ci.com/netdata/netdata) [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/2231/badge)](https://bestpractices.coreinfrastructure.org/projects/2231) [![License: GPL v3+](https://img.shields.io/badge/License-GPL%20v3%2B-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Freadme&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)](<>)
 
 [![Code Climate](https://codeclimate.com/github/netdata/netdata/badges/gpa.svg)](https://codeclimate.com/github/netdata/netdata) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/a994873f30d045b9b4b83606c3eb3498)](https://www.codacy.com/app/netdata/netdata?utm_source=github.com&utm_medium=referral&utm_content=netdata/netdata&utm_campaign=Badge_Grade) [![LGTM C](https://img.shields.io/lgtm/grade/cpp/g/netdata/netdata.svg?logo=lgtm)](https://lgtm.com/projects/g/netdata/netdata/context:cpp) [![LGTM JS](https://img.shields.io/lgtm/grade/javascript/g/netdata/netdata.svg?logo=lgtm)](https://lgtm.com/projects/g/netdata/netdata/context:javascript) [![LGTM PYTHON](https://img.shields.io/lgtm/grade/python/g/netdata/netdata.svg?logo=lgtm)](https://lgtm.com/projects/g/netdata/netdata/context:python)
@@ -156,9 +167,9 @@ not just visualize metrics.
 
 Release v1.18.1 contains 17 bug fixes, 5 improvements, and 5 documentation updates.
 
-The patch has several bug fixes, mainly related to FreeBSD and the binary package generation process. 
+The patch has several bug fixes, mainly related to FreeBSD and the binary package generation process.
 
-Netdata can now [send notifications to Google Hangouts Chat](https://docs.netdata.cloud/health/notifications/hangouts/)! 
+Netdata can now [send notifications to Google Hangouts Chat](https://docs.netdata.cloud/health/notifications/hangouts/)!
 
 On certain systems, the `slabinfo` plugin introduced in v1.18.0 added thousands of new metrics. We decided the collector's usefulness to most users didn't justify the increase in resource requirements. This release disables the collector by default.
 
@@ -194,7 +205,7 @@ The main reason for the patch release is an essential fix to the repeating alarm
 
 The release also includes a significant improvement to Netdata's auto-detection capabilities, especially after a system restart. Netdata now remembers which `python.d` plugin jobs were successfully collecting data the last time it was running, and retries to run those jobs for 5 minutes before giving up. As a result, you no longer have to worry if your system starts Netdata before the monitored services have had a chance to start properly. We will complete the same improvement for `go.d` plugins in v1.18.0.
 
-We also made some improvements to our binary packages and added a [neat sample custom dashboard](https://docs.netdata.cloud/web/gui/custom/#dash-multi-host-dashboard) that can show charts from multiple Netdata agents. 
+We also made some improvements to our binary packages and added a [neat sample custom dashboard](https://docs.netdata.cloud/web/gui/custom/#dash-multi-host-dashboard) that can show charts from multiple Netdata agents.
 
 ---
 
@@ -227,20 +238,20 @@ Release v1.16.0 contains 40 bug fixes, 31 improvements and 20 documentation upda
 -   Our stable distributions are at [netdata/netdata @ packagecloud.io](https://packagecloud.io/netdata/netdata)
 -   The nightly builds are at [netdata/netdata-edge @ packagecloud.io](https://packagecloud.io/netdata/netdata-edge)
 
-**Netdata now supports TLS encryption!** You can secure the communication to the [web server](https://docs.netdata.cloud/web/server/#enabling-tls-support), the [streaming connections from slaves to the master](https://docs.netdata.cloud/streaming/#securing-the-communication) and the connection to an [openTSDB backend](https://docs.netdata.cloud/backends/opentsdb/#https). 
+**Netdata now supports TLS encryption!** You can secure the communication to the [web server](https://docs.netdata.cloud/web/server/#enabling-tls-support), the [streaming connections from slaves to the master](https://docs.netdata.cloud/streaming/#securing-the-communication) and the connection to an [openTSDB backend](https://docs.netdata.cloud/backends/opentsdb/#https).
 
 **This version also brings two long-awaited features to Netdata’s health monitoring:**
 
 -   The [health management API](https://docs.netdata.cloud/web/api/health/#health-management-api) introduced in v1.12 allowed you to easily disable alarms and/or notifications while Netdata was running. However, those changes were not persisted across Netdata restarts. Since part of routine maintenance activities may involve completely restarting a monitoring node, Netdata now saves these configurations to disk, every time you issue a command to change the silencer settings. The new [LIST command](https://docs.netdata.cloud/web/api/health/#list-silencers) of the API allows you to view at any time which alarms are currently disabled or silenced.
--   A way for Netdata to [repeatedly send alarm notifications](https://docs.netdata.cloud/health/#alarm-line-repeat) for some, or all active alarms, at a frequency of your choosing. As a result, you will no longer have to worry about missing a notification, forgetting about a raised alarm. The default is still to only send a single notification, so that existing users are not surprised by a different behavior.  
+-   A way for Netdata to [repeatedly send alarm notifications](https://docs.netdata.cloud/health/#alarm-line-repeat) for some, or all active alarms, at a frequency of your choosing. As a result, you will no longer have to worry about missing a notification, forgetting about a raised alarm. The default is still to only send a single notification, so that existing users are not surprised by a different behavior.
 
 As always, we’ve introduced new collectors, 5 of them this time:
 
--   Of special interest to people with Windows servers in their infrastructure is the [WMI collector](https://docs.netdata.cloud/collectors/go.d.plugin/modules/wmi/), though we are fully aware that we need to continue our efforts to do a proper port to Windows. 
+-   Of special interest to people with Windows servers in their infrastructure is the [WMI collector](https://docs.netdata.cloud/collectors/go.d.plugin/modules/wmi/), though we are fully aware that we need to continue our efforts to do a proper port to Windows.
 -   The new `perf` plugin collects system-wide CPU performance statistics from Performance Monitoring Units (PMU) using the `perf_event_open()` system call. You can read a wonderful article on why this is useful [here](http://www.brendangregg.com/blog/2017-05-09/cpu-utilization-is-wrong.html).
--   The other three are collectors to monitor [Dnsmasq DHCP leases](https://docs.netdata.cloud/collectors/go.d.plugin/modules/dnsmasq_dhcp/), [Riak KV servers](https://docs.netdata.cloud/collectors/python.d.plugin/riakkv/) and [Pihole instances](https://docs.netdata.cloud/collectors/go.d.plugin/modules/pihole/). 
+-   The other three are collectors to monitor [Dnsmasq DHCP leases](https://docs.netdata.cloud/collectors/go.d.plugin/modules/dnsmasq_dhcp/), [Riak KV servers](https://docs.netdata.cloud/collectors/python.d.plugin/riakkv/) and [Pihole instances](https://docs.netdata.cloud/collectors/go.d.plugin/modules/pihole/).
 
-Finally, the DB Engine introduced in v1.15.0 now uses much less memory and is more robust than before. 
+Finally, the DB Engine introduced in v1.15.0 now uses much less memory and is more robust than before.
 
 ---
 
@@ -248,7 +259,7 @@ Finally, the DB Engine introduced in v1.15.0 now uses much less memory and is mo
 
 Release v1.15.0 contains 11 bug fixes and 30 improvements.
 
-We are very happy and proud to be able to include two major improvements in this release: The aggregated node view and the [new database engine](https://docs.netdata.cloud/database/engine/). 
+We are very happy and proud to be able to include two major improvements in this release: The aggregated node view and the [new database engine](https://docs.netdata.cloud/database/engine/).
 
 _Aggregated node view_
 
@@ -264,7 +275,7 @@ We have added support for the [AWS Kinesis backend](https://docs.netdata.cloud/b
 
 We now have a new, ["text-only" chart type](https://github.com/netdata/netdata/issues/5578), [cpu limits for v2 cgroups](https://github.com/netdata/netdata/issues/5850), [docker swarm metrics](https://docs.netdata.cloud/collectors/go.d.plugin/modules/docker_engine/) and improved [documentation](https://docs.netdata.cloud/).
 
-We continued improving the [Kubernetes helmchart](https://github.com/netdata/helmchart) with liveness probes for slaves, persistence options, a fix for a `Cannot allocate memory` issue and easy configuration for the kubelet, kube-proxy and coredns collectors. 
+We continued improving the [Kubernetes helmchart](https://github.com/netdata/helmchart) with liveness probes for slaves, persistence options, a fix for a `Cannot allocate memory` issue and easy configuration for the kubelet, kube-proxy and coredns collectors.
 
 Finally, we built a process to quickly replace any problematic nightly builds and added more automated CI tests to prevent such builds from being published in the first place.
 
@@ -274,11 +285,11 @@ Finally, we built a process to quickly replace any problematic nightly builds an
 
 Release 1.14 contains 14 bug fixes and 24 improvements.
 
-The release introduces major additions to Kubernetes monitoring, with tens of new charts for [Kubelet](https://docs.netdata.cloud/collectors/go.d.plugin/modules/k8s_kubelet/), [kube-proxy](https://docs.netdata.cloud/collectors/go.d.plugin/modules/k8s_kubeproxy/) and [coredns](https://github.com/netdata/go.d.plugin/tree/master/modules/coredns) metrics, as well as significant improvements to the Netdata [helm chart](https://github.com/netdata/helmchart/). 
+The release introduces major additions to Kubernetes monitoring, with tens of new charts for [Kubelet](https://docs.netdata.cloud/collectors/go.d.plugin/modules/k8s_kubelet/), [kube-proxy](https://docs.netdata.cloud/collectors/go.d.plugin/modules/k8s_kubeproxy/) and [coredns](https://github.com/netdata/go.d.plugin/tree/master/modules/coredns) metrics, as well as significant improvements to the Netdata [helm chart](https://github.com/netdata/helmchart/).
 
-Two new collectors were added, to monitor [Docker hub](https://docs.netdata.cloud/collectors/go.d.plugin/modules/dockerhub/) and [Docker engine](https://docs.netdata.cloud/collectors/go.d.plugin/modules/docker_engine/) metrics. 
+Two new collectors were added, to monitor [Docker hub](https://docs.netdata.cloud/collectors/go.d.plugin/modules/dockerhub/) and [Docker engine](https://docs.netdata.cloud/collectors/go.d.plugin/modules/docker_engine/) metrics.
 
-Finally, v1.14  adds support for [version 2 cgroups](https://github.com/netdata/netdata/pull/5407), [OpenLDAP over TLS](https://github.com/netdata/netdata/pull/5859), [NVIDIA SMI free and per process memory](https://github.com/netdata/netdata/pull/5796/files) and [configurable syslog facilities](https://github.com/netdata/netdata/pull/5792). 
+Finally, v1.14  adds support for [version 2 cgroups](https://github.com/netdata/netdata/pull/5407), [OpenLDAP over TLS](https://github.com/netdata/netdata/pull/5859), [NVIDIA SMI free and per process memory](https://github.com/netdata/netdata/pull/5796/files) and [configurable syslog facilities](https://github.com/netdata/netdata/pull/5792).
 
 ---
 
