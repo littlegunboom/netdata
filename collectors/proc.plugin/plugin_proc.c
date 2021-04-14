@@ -21,6 +21,9 @@ static struct proc_module {
         { .name = "/proc/loadavg", .dim = "loadavg", .func = do_proc_loadavg },
         { .name = "/proc/sys/kernel/random/entropy_avail", .dim = "entropy", .func = do_proc_sys_kernel_random_entropy_avail },
 
+        // pressure metrics
+        { .name = "/proc/pressure", .dim = "pressure", .func = do_proc_pressure },
+
         // CPU metrics
         { .name = "/proc/interrupts", .dim = "interrupts", .func = do_proc_interrupts },
         { .name = "/proc/softirqs", .dim = "softirqs", .func = do_proc_softirqs },
@@ -36,6 +39,7 @@ static struct proc_module {
 
         // network metrics
         { .name = "/proc/net/dev", .dim = "netdev", .func = do_proc_net_dev },
+        { .name = "/proc/net/wireless", .dim = "netwireless", .func = do_proc_net_wireless },
         { .name = "/proc/net/sockstat", .dim = "sockstat", .func = do_proc_net_sockstat },
         { .name = "/proc/net/sockstat6", .dim = "sockstat6", .func = do_proc_net_sockstat6 },
         { .name = "/proc/net/netstat", .dim = "netstat", .func = do_proc_net_netstat }, // this has to be before /proc/net/snmp, because there is a shared metric
@@ -44,6 +48,7 @@ static struct proc_module {
         { .name = "/proc/net/sctp/snmp", .dim = "sctp", .func = do_proc_net_sctp_snmp },
         { .name = "/proc/net/softnet_stat", .dim = "softnet", .func = do_proc_net_softnet_stat },
         { .name = "/proc/net/ip_vs/stats", .dim = "ipvs", .func = do_proc_net_ip_vs_stats },
+        { .name = "/sys/class/infiniband",   .dim = "infiniband", .func = do_sys_class_infiniband },
 
         // firewall metrics
         { .name = "/proc/net/stat/conntrack", .dim = "conntrack", .func = do_proc_net_stat_conntrack },
@@ -145,7 +150,7 @@ void *proc_main(void *ptr) {
             static RRDSET *st = NULL;
 
             if(unlikely(!st)) {
-                st = rrdset_find_bytype_localhost("netdata", "plugin_proc_modules");
+                st = rrdset_find_active_bytype_localhost("netdata", "plugin_proc_modules");
 
                 if(!st) {
                     st = rrdset_create_localhost(

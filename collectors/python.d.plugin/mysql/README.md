@@ -1,8 +1,14 @@
-# mysql
+<!--
+title: "MySQL monitoring with Netdata"
+custom_edit_url: https://github.com/netdata/netdata/edit/master/collectors/python.d.plugin/mysql/README.md
+sidebar_label: "MySQL"
+-->
 
-Module monitors one or more mysql servers
+# MySQL monitoring with Netdata
 
-**Requirements:**
+Monitors one or more MySQL servers.
+
+## Requirements
 
 -   python library [MySQLdb](https://github.com/PyMySQL/mysqlclient-python) (faster) or [PyMySQL](https://github.com/PyMySQL/PyMySQL) (slower)
 -   `netdata` local user to connect to the MySQL server. 
@@ -39,7 +45,7 @@ This module will produce following charts (if data is available):
     -   cache hits
     -   replace
 
-4.  **Handlerse** in handlers/s
+4.  **Handlers** in handlers/s
 
     -   commit
     -   delete
@@ -61,7 +67,7 @@ This module will produce following charts (if data is available):
     -   immediate
     -   waited
 
-6.  **Table Select Join Issuess** in joins/s
+6.  **Table Select Join Issues** in joins/s
 
     -   full join
     -   full range join
@@ -69,7 +75,7 @@ This module will produce following charts (if data is available):
     -   range check
     -   scan
 
-7.  **Table Sort Issuess** in joins/s
+7.  **Table Sort Issues** in joins/s
 
     -   merge passes
     -   range
@@ -158,7 +164,7 @@ This module will produce following charts (if data is available):
     -   updated
     -   deleted
 
-24. **InnoDB Buffer Pool Pagess** in pages
+24. **InnoDB Buffer Pool Pages** in pages
 
     -   data
     -   dirty
@@ -328,7 +334,15 @@ This module will produce following charts (if data is available):
     -   update
     -   other
 
-## configuration
+## Configuration
+
+Edit the `python.d/mysql.conf` configuration file using `edit-config` from the Netdata [config
+directory](/docs/configure/nodes.md), which is typically at `/etc/netdata`.
+
+```bash
+cd /etc/netdata   # Replace this path with your Netdata config directory, if different
+sudo ./edit-config python.d/mysql.conf
+```
 
 You can provide, per server, the following:
 
@@ -371,7 +385,7 @@ remote:
 ```
 
 If no configuration is given, the module will attempt to connect to MySQL server via a unix socket at
-`/var/run/mysqld/mysqld.sock` without password and with username `root`.
+`/var/run/mysqld/mysqld.sock` without password and with username `root` or `netdata` (you granted permissions for `netdata` user in the Requirements section of this document).
 
 `userstats` graph works only if you enable the plugin in MariaDB server and set proper MySQL privileges (SUPER or
 PROCESS). For more details, please check the [MariaDB User Statistics

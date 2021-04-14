@@ -1,6 +1,12 @@
-# elasticsearch
+<!--
+title: "Elasticsearch monitoring with Netdata"
+custom_edit_url: https://github.com/netdata/netdata/edit/master/collectors/python.d.plugin/elasticsearch/README.md
+sidebar_label: "Elasticsearch"
+-->
 
-This module monitors [Elasticsearch](https://www.elastic.co/products/elasticsearch) performance and health metrics.
+# Elasticsearch monitoring with Netdata
+
+Monitors [Elasticsearch](https://www.elastic.co/products/elasticsearch) performance and health metrics.
 
 It produces:
 
@@ -16,7 +22,7 @@ It produces:
     -   Time spent on indexing, refreshing, flushing
     -   Indexing and flushing latency
 
-3.  **Memory usage and garbace collection** charts:
+3.  **Memory usage and garbage collection** charts:
 
     -   JVM heap currently in use, committed
     -   Count of garbage collections
@@ -58,7 +64,15 @@ It produces:
     -   Num of replicas
     -   Health status
 
-## configuration
+## Configuration
+
+Edit the `python.d/elasticsearch.conf` configuration file using `edit-config` from the Netdata [config
+directory](/docs/configure/nodes.md), which is typically at `/etc/netdata`.
+
+```bash
+cd /etc/netdata   # Replace this path with your Netdata config directory, if different
+sudo ./edit-config python.d/elasticsearch.conf
+```
 
 Sample:
 
@@ -66,6 +80,7 @@ Sample:
 local:
   host               : 'ipaddress'    # Elasticsearch server ip address or hostname.
   port               : 'port'         # Port on which elasticsearch listens.
+  scheme             : 'http'         # URL scheme. Use 'https' if your elasticsearch uses TLS.
   node_status        :  yes/no        # Get metrics from "/_nodes/_local/stats". Enabled by default.
   cluster_health     :  yes/no        # Get metrics from "/_cluster/health". Enabled by default.
   cluster_stats      :  yes/no        # Get metrics from "'/_cluster/stats". Enabled by default.

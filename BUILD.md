@@ -1,3 +1,8 @@
+<!--
+title: "The build system"
+custom_edit_url: https://github.com/netdata/netdata/edit/master/BUILD.md
+-->
+
 # The build system
 
 We are currently migrating from `autotools` to `CMake` as a build-system. This document 
@@ -52,7 +57,7 @@ cmake -DENABLE_DBENGINE
 
 ### Dependency detection
 
-We have a mixture of soft- and hard-depedencies on libraries. For most of these we expect
+We have a mixture of soft- and hard-dependencies on libraries. For most of these we expect
 `pkg-config` information, for some we manually probe for libraries and include files. We
 should treat all of the external dependencies consistently:
 
@@ -136,7 +141,7 @@ find_file(HAVE_JSONC_H json/json.h PATHS ${OUR_INCLUDE_PATHS})
 
 Note: we may have cases where there is no `.pc` but we have access to a `.cmake` (e.g. AWS SDK, mongodb,cmocka) - these need to be checked / pulled inside the repo while building a prototype.
 
-### Compiler compatability checks
+### Compiler compatibility checks
 
 In CMakeLists.txt:
 
@@ -223,7 +228,7 @@ present. We might have an implicit way (like redirecting `cc`) but we should put
 
 ### Debugging problems in test compilations
 
-Test compilations attempt to feed a test-input into the targetted compiler and result
+Test compilations attempt to feed a test-input into the targeted compiler and result
 in a yes/no decision, this is similar to `AC_LANG_SOURCE(.... if test $ac_...` in .`m4`.
 We have two techniques to use in CMake:
 ```
@@ -341,10 +346,10 @@ We should follow these steps:
 9. Deprecate / remove the autotools build-system completely (so that we can support a single
    build-system).
 
-Some smaller miscellaeneous suggestions:
+Some smaller miscellaneous suggestions:
 
 1. Remove the `_Generic` / `strerror_r` config to make the system simpler (use the technique
-   on the blog post to make the standard version re-enterant so that it is thread-safe).
+   on the blog post to make the standard version re-entrant so that it is thread-safe).
 2. Pull in jemalloc by source into the repo if it is our preferred malloc implementation.
 
 # Background
@@ -357,3 +362,4 @@ Some smaller miscellaeneous suggestions:
 * [header checks in CMake](https://stackoverflow.com/questions/647892/how-to-check-header-files-and-library-functions-in-cmake-like-it-is-done-in-auto)
 * [how to write platform checks](https://gitlab.kitware.com/cmake/community/wikis/doc/tutorials/How-To-Write-Platform-Checks)
 
+[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2FBUILD&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)](<>)

@@ -108,10 +108,22 @@ static void rrdsetcalc_link(RRDSET *st, RRDCALC *rc) {
     }
 }
 
+static inline int rrdcalc_test_additional_restriction(RRDCALC *rc, RRDSET *st){
+    if (rc->module_match && !simple_pattern_matches(rc->module_pattern, st->module_name))
+        return 0;
+
+    if (rc->plugin_match && !simple_pattern_matches(rc->plugin_pattern, st->plugin_name))
+        return 0;
+
+    return 1;
+}
+
 static inline int rrdcalc_is_matching_this_rrdset(RRDCALC *rc, RRDSET *st) {
-    if(     (rc->hash_chart == st->hash      && !strcmp(rc->chart, st->id)) ||
-            (rc->hash_chart == st->hash_name && !strcmp(rc->chart, st->name)))
-        return 1;
+    if(((rc->hash_chart == st->hash      && !strcmp(rc->chart, st->id)) ||
+        (rc->hash_chart == st->hash_name && !strcmp(rc->chart, st->name))) &&
+        rrdcalc_test_additional_restriction(rc, st)) {
+            return 1;
+    }
 
     return 0;
 }
@@ -252,6 +264,9 @@ inline uint32_t rrdcalc_get_unique_id(RRDHOST *host, const char *chart, const ch
         }
     }
 
+    if (unlikely(!host->health_log.next_alarm_id))
+        host->health_log.next_alarm_id = (uint32_t)now_realtime_sec();
+
     return host->health_log.next_alarm_id++;
 }
 
@@ -307,7 +322,7 @@ inline void rrdcalc_add_to_host(RRDHOST *host, RRDCALC *rc) {
 
     if(rc->calculation) {
         rc->calculation->status = &rc->status;
-        rc->calculation->this = &rc->value;
+        rc->calculation->myself = &rc->value;
         rc->calculation->after = &rc->db_after;
         rc->calculation->before = &rc->db_before;
         rc->calculation->rrdcalc = rc;
@@ -315,7 +330,7 @@ inline void rrdcalc_add_to_host(RRDHOST *host, RRDCALC *rc) {
 
     if(rc->warning) {
         rc->warning->status = &rc->status;
-        rc->warning->this = &rc->value;
+        rc->warning->myself = &rc->value;
         rc->warning->after = &rc->db_after;
         rc->warning->before = &rc->db_before;
         rc->warning->rrdcalc = rc;
@@ -323,7 +338,7 @@ inline void rrdcalc_add_to_host(RRDHOST *host, RRDCALC *rc) {
 
     if(rc->critical) {
         rc->critical->status = &rc->status;
-        rc->critical->this = &rc->value;
+        rc->critical->myself = &rc->value;
         rc->critical->after = &rc->db_after;
         rc->critical->before = &rc->db_before;
         rc->critical->rrdcalc = rc;
@@ -457,7 +472,7 @@ inline RRDCALC *rrdcalc_create_from_template(RRDHOST *host, RRDCALCTEMPLATE *rt,
 
     rrdcalc_add_to_host(host, rc);
     if(!rt->foreachdim) {
-        RRDCALC *rdcmp  = (RRDCALC *) avl_insert_lock(&(host)->alarms_idx_health_log,(avl *)rc);
+        RRDCALC *rdcmp  = (RRDCALC *) avl_insert_lock(&(host)->alarms_idx_health_log,(avl_t *)rc);
         if (rdcmp != rc) {
             error("Cannot insert the alarm index ID %s",rc->name);
         }
@@ -559,6 +574,12 @@ void rrdcalc_free(RRDCALC *rc) {
     freez(rc->units);
     freez(rc->info);
     simple_pattern_free(rc->spdim);
+    freez(rc->labels);
+    simple_pattern_free(rc->splabels);
+    freez(rc->module_match);
+    simple_pattern_free(rc->module_pattern);
+    freez(rc->plugin_match);
+    simple_pattern_free(rc->plugin_pattern);
     freez(rc);
 }
 
@@ -584,23 +605,109 @@ void rrdcalc_unlink_and_free(RRDHOST *host, RRDCALC *rc) {
             error("Cannot unlink alarm '%s.%s' from host '%s': not found", rc->chart?rc->chart:"NOCHART", rc->name, host->hostname);
     }
 
-    RRDCALC *rdcmp = (RRDCALC *) avl_search_lock(&(host)->alarms_idx_health_log, (avl *)rc);
+    RRDCALC *rdcmp = (RRDCALC *) avl_search_lock(&(host)->alarms_idx_health_log, (avl_t *)rc);
     if (rdcmp) {
-        rdcmp = (RRDCALC *) avl_remove_lock(&(host)->alarms_idx_health_log, (avl *)rc);
+        rdcmp = (RRDCALC *) avl_remove_lock(&(host)->alarms_idx_health_log, (avl_t *)rc);
         if (!rdcmp) {
             error("Cannot remove the health alarm index from health_log");
         }
     }
 
-    rdcmp = (RRDCALC *) avl_search_lock(&(host)->alarms_idx_name, (avl *)rc);
+    rdcmp = (RRDCALC *) avl_search_lock(&(host)->alarms_idx_name, (avl_t *)rc);
     if (rdcmp) {
-        rdcmp = (RRDCALC *) avl_remove_lock(&(host)->alarms_idx_name, (avl *)rc);
+        rdcmp = (RRDCALC *) avl_remove_lock(&(host)->alarms_idx_name, (avl_t *)rc);
         if (!rdcmp) {
             error("Cannot remove the health alarm index from idx_name");
         }
     }
 
     rrdcalc_free(rc);
+}
+
+void rrdcalc_foreach_unlink_and_free(RRDHOST *host, RRDCALC *rc) {
+
+    if(unlikely(rc == host->alarms_with_foreach))
+        host->alarms_with_foreach = rc->next;
+    else {
+        RRDCALC *t;
+        for(t = host->alarms_with_foreach; t && t->next != rc; t = t->next) ;
+        if(t) {
+            t->next = rc->next;
+            rc->next = NULL;
+        }
+        else
+            error("Cannot unlink alarm '%s.%s' from host '%s': not found", rc->chart?rc->chart:"NOCHART", rc->name, host->hostname);
+    }
+
+    rrdcalc_free(rc);
+}
+
+static void rrdcalc_labels_unlink_alarm_loop(RRDHOST *host, RRDCALC *alarms) {
+    RRDCALC *rc = alarms;
+    while (rc) {
+        if (!rc->labels) {
+            rc = rc->next;
+            continue;
+        }
+
+        char cmp[CONFIG_FILE_LINE_MAX+1];
+        struct label *move = host->labels.head;
+        while(move) {
+            snprintf(cmp, CONFIG_FILE_LINE_MAX, "%s=%s", move->key, move->value);
+            if (simple_pattern_matches(rc->splabels, move->key) ||
+                simple_pattern_matches(rc->splabels, cmp)) {
+                break;
+            }
+
+            move = move->next;
+        }
+
+        RRDCALC *next = rc->next;
+        if(!move) {
+            info("Health configuration for alarm '%s' cannot be applied, because the host %s does not have the label(s) '%s'",
+                 rc->name,
+                 host->hostname,
+                 rc->labels);
+
+            if(host->alarms == alarms) {
+                rrdcalc_unlink_and_free(host, rc);
+            } else
+                rrdcalc_foreach_unlink_and_free(host, rc);
+
+        }
+
+        rc = next;
+    }
+}
+
+void rrdcalc_labels_unlink_alarm_from_host(RRDHOST *host) {
+    rrdhost_check_rdlock(host);
+    netdata_rwlock_rdlock(&host->labels.labels_rwlock);
+
+    rrdcalc_labels_unlink_alarm_loop(host, host->alarms);
+    rrdcalc_labels_unlink_alarm_loop(host, host->alarms_with_foreach);
+
+    netdata_rwlock_unlock(&host->labels.labels_rwlock);
+}
+
+void rrdcalc_labels_unlink() {
+    rrd_rdlock();
+
+    RRDHOST *host;
+    rrdhost_foreach_read(host) {
+        if (unlikely(!host->health_enabled))
+            continue;
+
+        if (host->labels.head) {
+            rrdhost_wrlock(host);
+
+            rrdcalc_labels_unlink_alarm_from_host(host);
+
+            rrdhost_unlock(host);
+        }
+    }
+
+    rrd_unlock();
 }
 
 // ----------------------------------------------------------------------------
@@ -620,7 +727,7 @@ void rrdcalc_unlink_and_free(RRDHOST *host, RRDCALC *rc) {
 int alarm_isrepeating(RRDHOST *host, uint32_t alarm_id) {
     RRDCALC findme;
     findme.id = alarm_id;
-    RRDCALC *rc = (RRDCALC *)avl_search_lock(&host->alarms_idx_health_log, (avl *)&findme);
+    RRDCALC *rc = (RRDCALC *)avl_search_lock(&host->alarms_idx_health_log, (avl_t *)&findme);
     if (!rc) {
         return 0;
     }
@@ -654,7 +761,7 @@ RRDCALC *alarm_max_last_repeat(RRDHOST *host, char *alarm_name,uint32_t hash) {
     RRDCALC findme;
     findme.name = alarm_name;
     findme.hash = hash;
-    RRDCALC *rc = (RRDCALC *)avl_search_lock(&host->alarms_idx_name, (avl *)&findme);
+    RRDCALC *rc = (RRDCALC *)avl_search_lock(&host->alarms_idx_name, (avl_t *)&findme);
 
     return rc;
 }

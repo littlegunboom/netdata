@@ -1,10 +1,15 @@
-# SMA Sunny Webbox
+<!--
+title: "SMA Sunny WebBox monitoring with Netdata"
+custom_edit_url: https://github.com/netdata/netdata/edit/master/collectors/node.d.plugin/sma_webbox/README.md
+sidebar_label: "SMA Sunny WebBox"
+-->
 
-[SMA Sunny Webbox](http://files.sma.de/dl/4253/WEBBOX-DUS131916W.pdf)
+# SMA Sunny WebBox monitoring with Netdata
 
-Example Netdata configuration for node.d/sma_webbox.conf
+Montiroing for the [SMA Sunny
+WebBox](https://www.sma-sunny.com/en/questions-and-answers-on-discontinuation-of-the-sunny-webbox/).
 
-The module supports any number of name servers, like this:
+The module supports any number of name servers:
 
 ```json
 {

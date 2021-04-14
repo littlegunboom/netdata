@@ -1,3 +1,8 @@
+<!--
+title: "Min"
+custom_edit_url: https://github.com/netdata/netdata/edit/master/web/api/queries/min/README.md
+-->
+
 # Min
 
 This module finds the min value in the time-frame given.

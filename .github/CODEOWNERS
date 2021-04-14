@@ -2,58 +2,65 @@
 # This way we prevent modifications which will be overwriten by automation.
 
 # Global (default) code owner
-* @ktsaou @cakrit @cosmix
+* @ktsaou @Ferroin
 
 # Ownership by directory structure
-.travis/ @cakrit @cosmix @knatsakis
-.github/ @cakrit @cosmix @knatsakis
+.travis/ @Ferroin @kaskavel @vkalintiris
+.github/ @Ferroin @kaskavel @vkalintiris
+aclk/ @stelfrag @underhood
 backends/ @thiagoftsm @vlvkobal
 backends/graphite/ @thiagoftsm @vlvkobal
 backends/json/ @thiagoftsm @vlvkobal
 backends/opentsdb/ @thiagoftsm @vlvkobal
 backends/prometheus/ @vlvkobal @thiagoftsm
-build/ @cakrit @cosmix @knatsakis
-collectors/ @vlvkobal @mfundul @cakrit @cosmix
-collectors/charts.d.plugin/ @cakrit @cosmix
-collectors/freebsd.plugin/ @vlvkobal @thiagoftsm @cakrit @cosmix
-collectors/macos.plugin/ @vlvkobal @thiagoftsm @cakrit @cosmix
-collectors/node.d.plugin/ @VLegakis @cakrit @cosmix
-collectors/node.d.plugin/fronius/ @ccremer @cakrit @cosmix
-collectors/node.d.plugin/snmp/ @VLegakis @cakrit @cosmix
-collectors/node.d.plugin/stiebeleltron/ @ccremer @cakrit @cosmix
+build/ @Ferroin
+contrib/debian @Ferroin @vkalintiris
+collectors/ @vlvkobal @mfundul
+collectors/charts.d.plugin/ @ilyam8 @Ferroin
+collectors/freebsd.plugin/ @vlvkobal @thiagoftsm
+collectors/ebpf.plugin/ @thiagoftsm @vlvkobal
+collectors/macos.plugin/ @vlvkobal @thiagoftsm
+collectors/node.d.plugin/ @jacekkolasa
+collectors/node.d.plugin/fronius/ @ccremer
+collectors/node.d.plugin/snmp/ @jacekkolasa
+collectors/node.d.plugin/stiebeleltron/ @ccremer
 collectors/python.d.plugin/ @ilyam8
-collectors/cups.plugin/ @simonnagl @vlvkobal @thiagoftsm @cakrit @cosmix
-daemon/ @thiagoftsm @mfundul @cakrit @cosmix
-database/ @mfundul @thiagoftsm @cakrit @cosmix
-docs/ @cakrit @cosmix @joelhans
-health/ @thiagoftsm @vlvkobal @cakrit @cosmix
-health/health.d/ @thiagoftsm @vlvkobal @cakrit @cosmix
-health/notifications/ @Ferroin @thiagoftsm @cakrit @cosmix
-libnetdata/ @thiagofsm @mfundul @cakrit @cosmix
-packaging/ @cakrit @cosmix @knatsakis
-registry/ @VLegakis @cakrit @cosmix
-streaming/ @thiagoftsm @vlvkobal @cakrit @cosmix
-web/ @thiagoftsm @mfundul @vlvkobal @cakrit @cosmix
-web/gui/ @VLegakis @cakrit @cosmix
+collectors/cups.plugin/ @simonnagl @vlvkobal @thiagoftsm
+exporting/  @vlvkobal @thiagoftsm
+daemon/ @thiagoftsm @mfundul
+database/ @mfundul @thiagoftsm
+docs/ @joelhans
+health/ @thiagoftsm @vlvkobal
+health/health.d/ @thiagoftsm @vlvkobal
+health/notifications/ @Ferroin @thiagoftsm
+libnetdata/ @thiagofsm @mfundul
+packaging/ @Ferroin @vkalintiris
+registry/ @jacekkolasa
+streaming/ @thiagoftsm @vlvkobal
+system/ @Ferroin @vkalintiris
+tests/ @Ferroin @kaskavel
+web/ @thiagoftsm @mfundul @vlvkobal
+web/gui/ @jacekkolasa
 
 # Ownership by filetype (overwrites ownership by directory)
-*.md @cakrit @cosmix @joelhans
-*.am @cakrit @cosmix @knatsakis
+*.am @Ferroin
+*.md @joelhans
+Dockerfile* @Ferroin @knatsakis
 
 # Ownership of specific files
-.gitignore @cakrit @cosmix @knatsakis
-.travis.yml @cakrit @cosmix @knatsakis
-.lgtm.yml @cakrit @cosmix @knatsakis
-.eslintrc @cakrit @cosmix @knatsakis
-.eslintignore @cakrit @cosmix @knatsakis
-.csslintrc @cakrit @cosmix @knatsakis
-.codeclimate.yml @cakrit @cosmix @knatsakis
-.codacy.yml @cakrit @cosmix @knatsakis
-netdata.spec.in @cakrit @cosmix @knatsakis
-netdata-installer.sh @cakrit @cosmix @knatsakis
-netlify.toml @cakrit @cosmix
-package.json @VLegakis
-packaging/version @netdatabot
+.gitignore @Ferroin @knatsakis
+.travis.yml @Ferroin @knatsakis @kaskavel @vkalintiris
+.lgtm.yml @Ferroin @knatsakis
+.eslintrc @Ferroin @knatsakis
+.eslintignore @Ferroin @knatsakis
+.csslintrc @Ferroin @knatsakis
+.codeclimate.yml @Ferroin @knatsakis
+.codacy.yml @Ferroin @knatsakis
+.yamllint.yml @Ferroin @knatsakis
+netdata.spec.in @Ferroin @knatsakis @vkalintiris
+netdata-installer.sh @Ferroin @knatsakis @vkalintiris
+package.json @jacekkolasa @Ferroin @knatsakis
+packaging/version @netdatabot @Ferroin @knatsakis
 
-LICENSE.md @cakrit @cosmix @joelhans
-CHANGELOG.md @netdatabot
+LICENSE.md @joelhans @Ferroin
+CHANGELOG.md @netdatabot @Ferroin

@@ -1,8 +1,14 @@
-# mongodb
+<!--
+title: "MongoDB monitoring with Netdata"
+custom_edit_url: https://github.com/netdata/netdata/edit/master/collectors/python.d.plugin/mongodb/README.md
+sidebar_label: "MongoDB"
+-->
 
-Module monitor mongodb performance and health metrics
+# MongoDB monitoring with Netdata
 
-**Requirements:**
+Monitors performance and health metrics of MongoDB.
+
+## Requirements
 
 -   `python-pymongo` package v2.4+.
 
@@ -74,7 +80,7 @@ Number of charts depends on mongodb version, storage engine and other features (
 13. **Cache metrics** (WiredTiger):
 
     -   percentage of bytes currently in the cache (amount of space taken by cached data)
-    -   percantage of tracked dirty bytes in the cache (amount of space taken by dirty data)
+    -   percentage of tracked dirty bytes in the cache (amount of space taken by dirty data)
 
 14. **Pages evicted from cache** (WiredTiger):
 
@@ -175,7 +181,15 @@ db.createUser({
 })
 ```
 
-### configuration
+## Configuration
+
+Edit the `python.d/mongodb.conf` configuration file using `edit-config` from the Netdata [config
+directory](/docs/configure/nodes.md), which is typically at `/etc/netdata`.
+
+```bash
+cd /etc/netdata   # Replace this path with your Netdata config directory, if different
+sudo ./edit-config python.d/mongodb.conf
+```
 
 Sample:
 

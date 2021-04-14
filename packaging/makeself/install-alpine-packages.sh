@@ -7,47 +7,47 @@
 #
 # Author: Paul Emm. Katsoulakis <paul@netdata.cloud>
 
-# Packaging update
-apk update
-
 # Add required APK packages
-apk add --no-cache \
-    bash \
-    wget \
-    curl \
-    ncurses \
-    git \
-    netcat-openbsd \
-    alpine-sdk \
-    autoconf \
-    automake \
-    gcc \
-    make \
-    cmake \
-    libtool \
-    pkgconfig \
-    util-linux-dev \
-    openssl-dev \
-    gnutls-dev \
-    zlib-dev \
-    libmnl-dev \
-    libnetfilter_acct-dev \
-    libuv-dev \
-    lz4-dev \
-    openssl-dev \
-    snappy-dev \
-    protobuf-dev \
-    || exit 1
+apk add --no-cache -U \
+  bash \
+  wget \
+  curl \
+  ncurses \
+  git \
+  netcat-openbsd \
+  alpine-sdk \
+  autoconf \
+  automake \
+  gcc \
+  make \
+  cmake \
+  libtool \
+  pkgconfig \
+  util-linux-dev \
+  gnutls-dev \
+  zlib-dev \
+  zlib-static \
+  libmnl-dev \
+  libnetfilter_acct-dev \
+  libuv-dev \
+  libuv-static \
+  lz4-dev \
+  lz4-static \
+  snappy-dev \
+  protobuf-dev \
+  binutils \
+  gzip \
+  openssl-dev \
+  xz || exit 1
 
-# snappy doesnt have static version in alpine, let's compile it
+# snappy doesn't have static version in alpine, let's compile it
 export SNAPPY_VER="1.1.7"
 wget -O /snappy.tar.gz https://github.com/google/snappy/archive/${SNAPPY_VER}.tar.gz
-cd /
-tar -xf snappy.tar.gz
-rm snappy.tar.gz
-cd /snappy-${SNAPPY_VER}
+tar -C / -xf /snappy.tar.gz
+rm /snappy.tar.gz
+cd /snappy-${SNAPPY_VER} || exit 1
 mkdir build
-cd build
+cd build || exit 1
 cmake -DCMAKE_BUILD_SHARED_LIBS=true -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_INSTALL_LIBDIR=lib ../
 make && make install
 

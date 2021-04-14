@@ -22,14 +22,14 @@ inline int health_alarm_log_open(RRDHOST *host) {
     return -1;
 }
 
-inline void health_alarm_log_close(RRDHOST *host) {
+static inline void health_alarm_log_close(RRDHOST *host) {
     if(host->health_log_fp) {
         fclose(host->health_log_fp);
         host->health_log_fp = NULL;
     }
 }
 
-inline void health_log_rotate(RRDHOST *host) {
+static inline void health_log_rotate(RRDHOST *host) {
     static size_t rotate_every = 0;
 
     if(unlikely(rotate_every == 0)) {
@@ -67,9 +67,40 @@ inline void health_log_rotate(RRDHOST *host) {
     }
 }
 
-inline void health_alarm_log_save(RRDHOST *host, ALARM_ENTRY *ae) {
+inline void health_label_log_save(RRDHOST *host) {
     health_log_rotate(host);
 
+    if(likely(host->health_log_fp)) {
+        BUFFER *wb = buffer_create(1024);
+        rrdhost_check_rdlock(host);
+        netdata_rwlock_rdlock(&host->labels.labels_rwlock);
+        struct label *l=localhost->labels.head;
+        while (l != NULL) {
+            buffer_sprintf(wb,"%s=%s\t ", l->key, l->value);
+            l = l->next;
+        }
+        netdata_rwlock_unlock(&host->labels.labels_rwlock);
+
+        char *write = (char *) buffer_tostring(wb) ;
+
+        write[wb->len-2] = '\n';
+        write[wb->len-1] = '\0';
+
+        if (unlikely(fprintf(host->health_log_fp, "L\t%s"
+                , write
+        ) < 0))
+            error("HEALTH [%s]: failed to save alarm log entry to '%s'. Health data may be lost in case of abnormal restart.",
+                  host->hostname, host->health_log_filename);
+        else {
+            host->health_log_entries_written++;
+        }
+
+        buffer_free(wb);
+    }
+}
+
+inline void health_alarm_log_save(RRDHOST *host, ALARM_ENTRY *ae) {
+    health_log_rotate(host);
     if(likely(host->health_log_fp)) {
         if(unlikely(fprintf(host->health_log_fp
                             , "%c\t%s"
@@ -121,9 +152,33 @@ inline void health_alarm_log_save(RRDHOST *host, ALARM_ENTRY *ae) {
             host->health_log_entries_written++;
         }
     }
+#ifdef ENABLE_ACLK
+    if (netdata_cloud_setting) {
+        if ((ae->new_status == RRDCALC_STATUS_WARNING || ae->new_status == RRDCALC_STATUS_CRITICAL) ||
+            ((ae->old_status == RRDCALC_STATUS_WARNING || ae->old_status == RRDCALC_STATUS_CRITICAL))) {
+            aclk_update_alarm(host, ae);
+        }
+    }
+#endif
 }
 
-inline ssize_t health_alarm_log_read(RRDHOST *host, FILE *fp, const char *filename) {
+static uint32_t is_valid_alarm_id(RRDHOST *host, const char *chart, const char *name, uint32_t alarm_id)
+{
+    uint32_t hash_chart = simple_hash(chart);
+    uint32_t hash_name = simple_hash(name);
+
+    ALARM_ENTRY *ae;
+    for(ae = host->health_log.alarms; ae ;ae = ae->next) {
+        if (unlikely(
+                ae->alarm_id == alarm_id && (!(ae->hash_name == hash_name && ae->hash_chart == hash_chart &&
+                                               !strcmp(name, ae->name) && !strcmp(chart, ae->chart))))) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static inline ssize_t health_alarm_log_read(RRDHOST *host, FILE *fp, const char *filename) {
     errno = 0;
 
     char *s, *buf = mallocz(65536 + 1);
@@ -152,11 +207,14 @@ inline ssize_t health_alarm_log_read(RRDHOST *host, FILE *fp, const char *filena
             else s++;
         }
 
+        if(likely(*pointers[0] == 'L'))
+            continue;
+
         if(likely(*pointers[0] == 'U' || *pointers[0] == 'A')) {
             ALARM_ENTRY *ae = NULL;
 
-            if(entries < 26) {
-                error("HEALTH [%s]: line %zu of file '%s' should have at least 26 entries, but it has %d. Ignoring it.", host->hostname, line, filename, entries);
+            if(entries < 27) {
+                error("HEALTH [%s]: line %zu of file '%s' should have at least 27 entries, but it has %d. Ignoring it.", host->hostname, line, filename, entries);
                 errored++;
                 continue;
             }
@@ -185,7 +243,7 @@ inline ssize_t health_alarm_log_read(RRDHOST *host, FILE *fp, const char *filena
                 RRDCALC *rc = alarm_max_last_repeat(host, alarm_name,simple_hash(alarm_name));
                 if (!rc) {
                     for(rc = host->alarms; rc ; rc = rc->next) {
-                        RRDCALC *rdcmp  = (RRDCALC *) avl_insert_lock(&(host)->alarms_idx_name, (avl *)rc);
+                        RRDCALC *rdcmp  = (RRDCALC *) avl_insert_lock(&(host)->alarms_idx_name, (avl_t *)rc);
                         if(rdcmp != rc) {
                             error("Cannot insert the alarm index ID using log %s", rc->name);
                         }
@@ -243,11 +301,13 @@ inline ssize_t health_alarm_log_read(RRDHOST *host, FILE *fp, const char *filena
                 continue;
             }
 
-            // check for a possible host missmatch
+            // check for a possible host mismatch
             //if(strcmp(pointers[1], host->hostname))
             //    error("HEALTH [%s]: line %zu of file '%s' provides an alarm for host '%s' but this is named '%s'.", host->hostname, line, filename, pointers[1], host->hostname);
 
             ae->unique_id               = unique_id;
+            if (!is_valid_alarm_id(host, pointers[14], pointers[13], alarm_id))
+                alarm_id = rrdcalc_get_unique_id(host, pointers[14], pointers[13], NULL);
             ae->alarm_id                = alarm_id;
             ae->alarm_event_id          = (uint32_t)strtoul(pointers[4], NULL, 16);
             ae->updated_by_id           = (uint32_t)strtoul(pointers[5], NULL, 16);
@@ -338,7 +398,8 @@ inline ssize_t health_alarm_log_read(RRDHOST *host, FILE *fp, const char *filena
     if(!host->health_max_alarm_id)  host->health_max_alarm_id  = (uint32_t)now_realtime_sec();
 
     host->health_log.next_log_id = host->health_max_unique_id + 1;
-    host->health_log.next_alarm_id = host->health_max_alarm_id + 1;
+    if (unlikely(!host->health_log.next_alarm_id || host->health_log.next_alarm_id <= host->health_max_alarm_id))
+        host->health_log.next_alarm_id = host->health_max_alarm_id + 1;
 
     debug(D_HEALTH, "HEALTH [%s]: loaded file '%s' with %zd new alarm entries, updated %zd alarms, errors %zd entries, duplicate %zd", host->hostname, filename, loaded, updated, errored, duplicate);
     return loaded;

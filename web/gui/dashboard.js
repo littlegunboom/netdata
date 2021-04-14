@@ -63,7 +63,7 @@
  *                                                  (default: null) */
 /*global netdataAlarmsRecipients     *//* array,    an array of alarm recipients to show notifications for
  *                                                  (default: null) */
-/*global netdataAlarmsRemember       *//* boolen,   keep our position in the alarm log at browser local storage
+/*global netdataAlarmsRemember       *//* boolean,  keep our position in the alarm log at browser local storage
  *                                                  (default: true) */
 /*global netdataAlarmsActiveCallback *//* function, a hook for the alarm logs
  *                                                  (default: undefined) */
@@ -792,12 +792,26 @@ NETDATA.unitsConversion = {
             'gigabits/s': 1000000,
             'terabits/s': 1000000000
         },
+        'bytes/s': {
+            'bytes/s': 1,
+            'kilobytes/s': 1024,
+            'megabytes/s': 1024 * 1024,
+            'gigabytes/s': 1024 * 1024 * 1024,
+            'terabytes/s': 1024 * 1024 * 1024 * 1024
+        },
         'kilobytes/s': {
             'bytes/s': 1 / 1024,
             'kilobytes/s': 1,
             'megabytes/s': 1024,
             'gigabytes/s': 1024 * 1024,
             'terabytes/s': 1024 * 1024 * 1024
+        },
+        'B/s': {
+            'B/s': 1,
+            'KiB/s': 1024,
+            'MiB/s': 1024 * 1024,
+            'GiB/s': 1024 * 1024 * 1024,
+            'TiB/s': 1024 * 1024 * 1024 * 1024
         },
         'KB/s': {
             'B/s': 1 / 1024,
@@ -2185,6 +2199,9 @@ NETDATA.dygraphChartCreate = function (state, data) {
         visibility: state.dimensions_visibility.selected2BooleanArray(state.data.dimension_names),
         logscale: NETDATA.chartLibraries.dygraph.isLogScale(state) ? 'y' : undefined,
 
+        // Expects a string in the format "<series name>: <style>" where each series is separated by a |
+        perSeriesStyle: NETDATA.dataAttribute(state.element, 'dygraph-per-series-style', ''),
+
         axes: {
             x: {
                 pixelsPerLabel: NETDATA.dataAttribute(state.element, 'dygraph-xpixelsperlabel', 50),
@@ -2841,9 +2858,14 @@ NETDATA.dygraphChartCreate = function (state, data) {
         //state.tmp.dygraph_options.isZoomedIgnoreProgrammaticZoom = true;
     }
 
-    state.tmp.dygraph_instance = new Dygraph(state.element_chart,
-        data.result.data, state.tmp.dygraph_options);
+    let seriesStyles = NETDATA.dygraphGetSeriesStyle(state.tmp.dygraph_options);
+    state.tmp.dygraph_options.series = seriesStyles;
 
+    state.tmp.dygraph_instance = new Dygraph(
+        state.element_chart,
+        data.result.data,
+        state.tmp.dygraph_options
+    );
 
     state.tmp.dygraph_history_tip_element = document.createElement('div');
     state.tmp.dygraph_history_tip_element.innerHTML = `
@@ -2880,6 +2902,51 @@ NETDATA.dygraphChartCreate = function (state, data) {
     }
 
     return true;
+};
+
+NETDATA.dygraphGetSeriesStyle = function(dygraphOptions) {
+    const seriesStyleStr = dygraphOptions.perSeriesStyle;
+    let formattedStyles = {};
+
+    if (seriesStyleStr === '') {
+      return formattedStyles;
+    }
+
+    // Parse the config string into a JSON object
+    let styles = seriesStyleStr.replace(' ', '').split('|');
+
+    styles.forEach(style => {
+        const keys = style.split(':');
+        formattedStyles[keys[0]] = keys[1];
+    });
+
+    for (let key in formattedStyles) {
+        if (formattedStyles.hasOwnProperty(key)) {
+            let settings;
+
+            switch (formattedStyles[key]) {
+                case 'line':
+                    settings = { fillGraph: false };
+                    break;
+                case 'area':
+                    settings = { fillGraph: true };
+                    break;
+                case 'dot':
+                    settings = {
+                        fillGraph: false,
+                        drawPoints: true,
+                        pointSize: dygraphOptions.pointSize
+                    };
+                    break;
+                default:
+                    settings = undefined;
+            }
+
+            formattedStyles[key] = settings;
+        }
+    }
+
+    return formattedStyles;
 };
 // ----------------------------------------------------------------------------------------------------------------
 // sparkline
@@ -6587,7 +6654,7 @@ let chartState = function (element) {
             if (NETDATA.options.current.show_help) {
                 if (this.element_legend_childs.toolbox !== null) {
                     if (this.debug) {
-                        this.log('hideChart(): hidding legend popovers');
+                        this.log('hideChart(): hiding legend popovers');
                     }
 
                     $(this.element_legend_childs.toolbox_left).popover('hide');
@@ -7944,7 +8011,7 @@ let chartState = function (element) {
                             hide: NETDATA.options.current.show_help_delay_hide_ms
                         },
                         title: 'Pan Right',
-                        content: 'Pan the chart to the right. You can also <b>drag it</b> with your mouse or your finger (on touch devices).<br/><small>Help, can be disabled from the settings.</small>'
+                        content: 'Pan the chart to the right. You can also <b>drag it</b> with your mouse or your finger (on touch devices).<br/><small>Help can be disabled from the settings.</small>'
                     });
                 }
 
@@ -7970,7 +8037,7 @@ let chartState = function (element) {
                             hide: NETDATA.options.current.show_help_delay_hide_ms
                         },
                         title: 'Chart Zoom In',
-                        content: 'Zoom in the chart. You can also press SHIFT and select an area of the chart, or press SHIFT or ALT and use the mouse wheel or 2-finger touchpad scroll to zoom in or out.<br/><small>Help, can be disabled from the settings.</small>'
+                        content: 'Zoom in the chart. You can also press SHIFT and select an area of the chart, or press SHIFT or ALT and use the mouse wheel or 2-finger touchpad scroll to zoom in or out.<br/><small>Help can be disabled from the settings.</small>'
                     });
                 }
 
@@ -7997,7 +8064,7 @@ let chartState = function (element) {
                             hide: NETDATA.options.current.show_help_delay_hide_ms
                         },
                         title: 'Chart Zoom Out',
-                        content: 'Zoom out the chart. You can also press SHIFT or ALT and use the mouse wheel, or 2-finger touchpad scroll to zoom in or out.<br/><small>Help, can be disabled from the settings.</small>'
+                        content: 'Zoom out the chart. You can also press SHIFT or ALT and use the mouse wheel, or 2-finger touchpad scroll to zoom in or out.<br/><small>Help can be disabled from the settings.</small>'
                     });
                 }
 
@@ -8029,7 +8096,7 @@ let chartState = function (element) {
                             hide: NETDATA.options.current.show_help_delay_hide_ms
                         },
                         title: 'Chart Resize',
-                        content: 'Drag this point with your mouse or your finger (on touch devices), to resize the chart vertically. You can also <b>double click it</b> or <b>double tap it</b> to reset between 2 states: the default and the one that fits all the values.<br/><small>Help, can be disabled from the settings.</small>'
+                        content: 'Drag this point with your mouse or your finger (on touch devices), to resize the chart vertically. You can also <b>double click it</b> or <b>double tap it</b> to reset between 2 states: the default and the one that fits all the values.<br/><small>Help can be disabled from the settings.</small>'
                     });
                 }
 
@@ -8089,7 +8156,7 @@ let chartState = function (element) {
                         show: NETDATA.options.current.show_help_delay_show_ms,
                         hide: NETDATA.options.current.show_help_delay_hide_ms
                     },
-                    content: 'You can click or tap on the values or the labels to select dimensions. By pressing SHIFT or CONTROL, you can enable or disable multiple dimensions.<br/><small>Help, can be disabled from the settings.</small>'
+                    content: 'You can click or tap on the values or the labels to select dimensions. By pressing SHIFT or CONTROL, you can enable or disable multiple dimensions.<br/><small>Help can be disabled from the settings.</small>'
                 });
             }
         } else {
@@ -8134,7 +8201,7 @@ let chartState = function (element) {
             }
         }
 
-        // create a hidden div to be used for hidding
+        // create a hidden div to be used for hiding
         // the original legend of the chart library
         let el = document.createElement('div');
         if (this.element_legend !== null) {

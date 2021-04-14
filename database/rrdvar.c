@@ -27,7 +27,7 @@ int rrdvar_compare(void* a, void* b) {
 }
 
 static inline RRDVAR *rrdvar_index_add(avl_tree_lock *tree, RRDVAR *rv) {
-    RRDVAR *ret = (RRDVAR *)avl_insert_lock(tree, (avl *)(rv));
+    RRDVAR *ret = (RRDVAR *)avl_insert_lock(tree, (avl_t *)(rv));
     if(ret != rv)
         debug(D_VARIABLES, "Request to insert RRDVAR '%s' into index failed. Already exists.", rv->name);
 
@@ -35,7 +35,7 @@ static inline RRDVAR *rrdvar_index_add(avl_tree_lock *tree, RRDVAR *rv) {
 }
 
 static inline RRDVAR *rrdvar_index_del(avl_tree_lock *tree, RRDVAR *rv) {
-    RRDVAR *ret = (RRDVAR *)avl_remove_lock(tree, (avl *)(rv));
+    RRDVAR *ret = (RRDVAR *)avl_remove_lock(tree, (avl_t *)(rv));
     if(!ret)
         error("Request to remove RRDVAR '%s' from index failed. Not Found.", rv->name);
 
@@ -47,7 +47,7 @@ static inline RRDVAR *rrdvar_index_find(avl_tree_lock *tree, const char *name, u
     tmp.name = (char *)name;
     tmp.hash = (hash)?hash:simple_hash(tmp.name);
 
-    return (RRDVAR *)avl_search_lock(tree, (avl *)&tmp);
+    return (RRDVAR *)avl_search_lock(tree, (avl_t *)&tmp);
 }
 
 inline void rrdvar_free(RRDHOST *host, avl_tree_lock *tree, RRDVAR *rv) {
@@ -291,12 +291,15 @@ void health_api_v1_chart_variables2json(RRDSET *st, BUFFER *buf) {
 
     buffer_sprintf(buf, "{\n\t\"chart\": \"%s\",\n\t\"chart_name\": \"%s\",\n\t\"chart_context\": \"%s\",\n\t\"chart_variables\": {", st->id, st->name, st->context);
     avl_traverse_lock(&st->rrdvar_root_index, single_variable2json, (void *)&helper);
+
     buffer_sprintf(buf, "\n\t},\n\t\"family\": \"%s\",\n\t\"family_variables\": {", st->family);
     helper.counter = 0;
     avl_traverse_lock(&st->rrdfamily->rrdvar_root_index, single_variable2json, (void *)&helper);
+
     buffer_sprintf(buf, "\n\t},\n\t\"host\": \"%s\",\n\t\"host_variables\": {", host->hostname);
     helper.counter = 0;
     avl_traverse_lock(&host->rrdvar_root_index, single_variable2json, (void *)&helper);
+
     buffer_strcat(buf, "\n\t}\n}\n");
 }
 

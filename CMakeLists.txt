@@ -31,6 +31,7 @@ IF("${CMAKE_BUILD_TYPE}" MATCHES "Debug")
     set(CXX_FORMAT_SECURITY "-Werror=format-security")
     set(CXX_STACK_PROTECTOR "-fstack-protector-all")
     set(CXX_FLAGS_DEBUG "-O0")
+    set(CMAKE_C_STANDARD 99)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O1 -ggdb -Wall -Wextra -DNETDATA_INTERNAL_CHECKS=1 -DNETDATA_VERIFY_LOCKS=1 ${CXX_FORMAT_SIGNEDNESS} ${CXX_FORMAT_SECURITY} ${CXX_STACK_PROTECTOR} ${CXX_FLAGS_DEBUG}")
 ELSE()
     message(STATUS "building for: release")
@@ -236,26 +237,67 @@ pkg_check_modules(CURL libcurl)
 # ${CURL_CFLAGS_OTHER}
 # ${CURL_INCLUDE_DIRS}
 
+# -----------------------------------------------------------------------------
+# Detect libaws-c-common
+
+find_library(HAVE_AWS_CHECKSUMS aws-checksums)
+# later we use:
+# ${HAVE_AWS_CHECKSUMS}
+
+# -----------------------------------------------------------------------------
+# Detect libaws-c-common
+
+find_library(HAVE_AWS_COMMON aws-c-common)
+# later we use:
+# ${HAVE_AWS_COMMON}
+
+# -----------------------------------------------------------------------------
+# Detect libaws-c-common
+
+find_library(HAVE_AWS_EVENT_STREAM aws-c-event-stream)
+# later we use:
+# ${HAVE_AWS_EVENT_STREAM}
 
 # -----------------------------------------------------------------------------
 # Detect libaws-cpp-sdk-core
 
-find_library(HAVE_AWS aws-cpp-sdk-core)
+pkg_check_modules(AWS_CORE aws-cpp-sdk-core)
 # later we use:
-# ${HAVE_AWS}
+# ${AWS_CORE_LIBRARIES}
+# ${AWS_CORE_CFLAGS_OTHER}
+# ${AWS_CORE_INCLUDE_DIRS}
 
 # -----------------------------------------------------------------------------
 # Detect libaws-cpp-sdk-kinesis
 
-find_library(HAVE_KINESIS aws-cpp-sdk-kinesis)
+pkg_check_modules(KINESIS aws-cpp-sdk-kinesis)
 # later we use:
-# ${HAVE_KINESIS}
+# ${KINESIS_LIBRARIES}
+# ${KINESIS_CFLAGS_OTHER}
+# ${KINESIS_INCLUDE_DIRS}
 
+# -----------------------------------------------------------------------------
+# Detect libgrpc
+
+pkg_check_modules(GRPC grpc)
+# later we use:
+# ${GRPC_LIBRARIES}
+# ${GRPC_CFLAGS_OTHER}
+# ${GRPC_INCLUDE_DIRS}
+
+# -----------------------------------------------------------------------------
+# Detect libgoogleapis_cpp_pubsub_protos
+
+pkg_check_modules(PUBSUB googleapis_cpp_pubsub_protos)
+# later we use:
+# ${PUBSUB_LIBRARIES}
+# ${PUBSUB_CFLAGS_OTHER}
+# ${PUBSUB_INCLUDE_DIRS}
 
 # -----------------------------------------------------------------------------
 # Detect libprotobuf
 
-pkg_check_modules(PROTOBUF protobuf)
+pkg_check_modules(PROTOBUF protobuf>=3)
 # later we use:
 # ${PROTOBUF_LIBRARIES}
 # ${PROTOBUF_CFLAGS_OTHER}
@@ -279,6 +321,30 @@ find_package(libmongoc-1.0)
 # later we use:
 # ${MONGOC_LIBRARIES}
 # ${MONGOC_INCLUDE_DIRS}
+
+
+# -----------------------------------------------------------------------------
+# Detect libbpf
+IF(LINUX AND EXISTS "${CMAKE_SOURCE_DIR}/externaldeps/libbpf/libbpf.a")
+    message(STATUS "libbpf library found")
+    pkg_check_modules(ELF REQUIRED libelf)
+    # later we use:
+    # ${ELF_LIBRARIES}
+    # ${ELF_CFLAGS_OTHER}
+    # ${ELF_INCLUDE_DIRS}
+    IF(ELF_LIBRARIES)
+        list(APPEND NETDATA_COMMON_CFLAGS ${ELF_CFLAGS_OTHER})
+        list(INSERT NETDATA_COMMON_LIBRARIES 0
+            ${CMAKE_SOURCE_DIR}/externaldeps/libbpf/libbpf.a
+            ${ELF_LIBRARIES})
+        list(APPEND NETDATA_COMMON_INCLUDE_DIRS ${ELF_INCLUDE_DIRS})
+        include_directories(BEFORE ${CMAKE_SOURCE_DIR}/externaldeps/libbpf/include)
+        set(ENABLE_PLUGIN_EBPF True)
+    ELSE(ELF_LIBRARIES)
+        set(ENABLE_PLUGIN_EBPF False)
+        message(STATUS "ebpf plugin: disabled (requires libelf)")
+    ENDIF(ELF_LIBRARIES)
+ENDIF()
 
 
 # -----------------------------------------------------------------------------
@@ -333,13 +399,20 @@ set(LIBNETDATA_FILES
         libnetdata/health/health.h
         libnetdata/string/utf8.h
         libnetdata/socket/security.c
-        libnetdata/socket/security.h)
+        libnetdata/socket/security.h
+        libnetdata/circular_buffer/circular_buffer.c
+        libnetdata/circular_buffer/circular_buffer.h)
+
+IF(ENABLE_PLUGIN_EBPF)
+    list(APPEND LIBNETDATA_FILES
+        libnetdata/ebpf/ebpf.c
+        libnetdata/ebpf/ebpf.h)
+ENDIF()
 
 add_library(libnetdata OBJECT ${LIBNETDATA_FILES})
 
 set(APPS_PLUGIN_FILES
-        collectors/apps.plugin/apps_plugin.c
-        )
+        collectors/apps.plugin/apps_plugin.c)
 
 set(CHECKS_PLUGIN_FILES
         collectors/checks.plugin/plugin_checks.c
@@ -385,6 +458,11 @@ set(DISKSPACE_PLUGIN_FILES
         collectors/diskspace.plugin/plugin_diskspace.c
         )
 
+set(TIMEX_PLUGIN_FILES
+        collectors/timex.plugin/plugin_timex.h
+        collectors/timex.plugin/plugin_timex.c
+        )
+
 set(FREEIPMI_PLUGIN_FILES
         collectors/freeipmi.plugin/freeipmi_plugin.c
         )
@@ -405,6 +483,21 @@ set(SLABINFO_PLUGIN_FILES
         collectors/slabinfo.plugin/slabinfo.c
         )
 
+set(EBPF_PROCESS_PLUGIN_FILES
+        collectors/ebpf.plugin/ebpf.c
+        collectors/ebpf.plugin/ebpf.h
+        collectors/ebpf.plugin/ebpf_cachestat.c
+        collectors/ebpf.plugin/ebpf_cachestat.h
+        collectors/ebpf.plugin/ebpf_process.c
+        collectors/ebpf.plugin/ebpf_process.h
+        collectors/ebpf.plugin/ebpf_socket.c
+        collectors/ebpf.plugin/ebpf_socket.h
+        collectors/ebpf.plugin/ebpf_sync.c
+        collectors/ebpf.plugin/ebpf_sync.h
+        collectors/ebpf.plugin/ebpf_apps.c
+        collectors/ebpf.plugin/ebpf_apps.h
+        )
+
 set(PROC_PLUGIN_FILES
         collectors/proc.plugin/ipc.c
         collectors/proc.plugin/plugin_proc.c
@@ -417,6 +510,7 @@ set(PROC_PLUGIN_FILES
         collectors/proc.plugin/proc_meminfo.c
         collectors/proc.plugin/proc_pagetypeinfo.c
         collectors/proc.plugin/proc_net_dev.c
+        collectors/proc.plugin/proc_net_wireless.c
         collectors/proc.plugin/proc_net_ip_vs_stats.c
         collectors/proc.plugin/proc_net_netstat.c
         collectors/proc.plugin/proc_net_rpc_nfs.c
@@ -438,10 +532,13 @@ set(PROC_PLUGIN_FILES
         collectors/proc.plugin/proc_sys_kernel_random_entropy_avail.c
         collectors/proc.plugin/proc_vmstat.c
         collectors/proc.plugin/proc_uptime.c
+        collectors/proc.plugin/proc_pressure.c
+        collectors/proc.plugin/proc_pressure.h
         collectors/proc.plugin/sys_kernel_mm_ksm.c
         collectors/proc.plugin/sys_block_zram.c
         collectors/proc.plugin/sys_devices_system_edac_mc.c
         collectors/proc.plugin/sys_devices_system_node.c
+        collectors/proc.plugin/sys_class_infiniband.c
         collectors/proc.plugin/sys_fs_btrfs.c
         collectors/proc.plugin/sys_class_power_supply.c
         )
@@ -462,6 +559,13 @@ set(MACOS_PLUGIN_FILES
 set(PLUGINSD_PLUGIN_FILES
         collectors/plugins.d/plugins_d.c
         collectors/plugins.d/plugins_d.h
+        collectors/plugins.d/pluginsd_parser.c
+        collectors/plugins.d/pluginsd_parser.h
+        )
+
+set(PARSER_PLUGIN_FILES
+        parser/parser.c
+        parser/parser.h
         )
 
 set(REGISTRY_PLUGIN_FILES
@@ -495,6 +599,7 @@ set(RRD_PLUGIN_FILES
         database/rrddimvar.h
         database/rrdfamily.c
         database/rrdhost.c
+        database/rrdlabels.c
         database/rrd.c
         database/rrd.h
         database/rrdset.c
@@ -502,6 +607,10 @@ set(RRD_PLUGIN_FILES
         database/rrdsetvar.h
         database/rrdvar.c
         database/rrdvar.h
+        database/sqlite/sqlite_functions.c
+        database/sqlite/sqlite_functions.h
+        database/sqlite/sqlite3.c
+        database/sqlite/sqlite3.h
         database/engine/rrdengine.c
         database/engine/rrdengine.h
         database/engine/rrddiskprotocol.h
@@ -517,6 +626,16 @@ set(RRD_PLUGIN_FILES
         database/engine/pagecache.h
         database/engine/rrdenglocking.c
         database/engine/rrdenglocking.h
+        database/engine/metadata_log/metadatalog.h
+        database/engine/metadata_log/metadatalogapi.c
+        database/engine/metadata_log/metadatalogapi.h
+        database/engine/metadata_log/logfile.h
+        database/engine/metadata_log/logfile.c
+        database/engine/metadata_log/metadatalogprotocol.h
+        database/engine/metadata_log/metalogpluginsd.c
+        database/engine/metadata_log/metalogpluginsd.h
+        database/engine/metadata_log/compaction.c
+        database/engine/metadata_log/compaction.h
         )
 
 set(WEB_PLUGIN_FILES
@@ -583,6 +702,8 @@ set(API_PLUGIN_FILES
 set(STREAMING_PLUGIN_FILES
         streaming/rrdpush.c
         streaming/rrdpush.h
+        streaming/receiver.c
+        streaming/sender.c
         )
 
 set(BACKENDS_PLUGIN_FILES
@@ -596,6 +717,89 @@ set(BACKENDS_PLUGIN_FILES
         backends/opentsdb/opentsdb.h
         backends/prometheus/backend_prometheus.c
         backends/prometheus/backend_prometheus.h
+        )
+
+set(CLAIM_PLUGIN_FILES
+        claim/claim.c
+        claim/claim.h
+        aclk/legacy/aclk_rrdhost_state.h
+        aclk/legacy/aclk_common.c
+        aclk/legacy/aclk_common.h
+        )
+
+set(ACLK_PLUGIN_FILES
+        aclk/legacy/agent_cloud_link.c
+        aclk/legacy/agent_cloud_link.h
+        aclk/legacy/aclk_query.c
+        aclk/legacy/aclk_query.h
+        aclk/legacy/aclk_lws_wss_client.c
+        aclk/legacy/aclk_lws_wss_client.h
+        aclk/legacy/aclk_lws_https_client.c
+        aclk/legacy/aclk_lws_https_client.h
+        aclk/legacy/mqtt.c
+        aclk/legacy/mqtt.h
+        aclk/legacy/aclk_stats.c
+        aclk/legacy/aclk_stats.h
+        aclk/legacy/aclk_rx_msgs.c
+        aclk/legacy/aclk_rx_msgs.h
+        )
+
+set(SPAWN_PLUGIN_FILES
+        spawn/spawn.c
+        spawn/spawn_server.c
+        spawn/spawn_client.c
+        spawn/spawn.h
+        )
+
+set(ACLK_STATIC_LIBS
+        ${CMAKE_SOURCE_DIR}/externaldeps/mosquitto/libmosquitto.a
+        ${CMAKE_SOURCE_DIR}/externaldeps/libwebsockets/libwebsockets.a
+        )
+
+set(EXPORTING_ENGINE_FILES
+        exporting/exporting_engine.c
+        exporting/exporting_engine.h
+        exporting/graphite/graphite.c
+        exporting/graphite/graphite.h
+        exporting/json/json.c
+        exporting/json/json.h
+        exporting/opentsdb/opentsdb.c
+        exporting/opentsdb/opentsdb.h
+        exporting/prometheus/prometheus.c
+        exporting/prometheus/prometheus.h
+        exporting/read_config.c
+        exporting/clean_connectors.c
+        exporting/init_connectors.c
+        exporting/process_data.c
+        exporting/check_filters.c
+        exporting/send_data.c
+        exporting/send_internal_metrics.c
+        )
+
+set(PROMETHEUS_REMOTE_WRITE_EXPORTING_FILES
+        exporting/prometheus/remote_write/remote_write.c
+        exporting/prometheus/remote_write/remote_write.h
+        exporting/prometheus/remote_write/remote_write_request.cc
+        exporting/prometheus/remote_write/remote_write_request.h
+        )
+
+set(KINESIS_EXPORTING_FILES
+        exporting/aws_kinesis/aws_kinesis.c
+        exporting/aws_kinesis/aws_kinesis.h
+        exporting/aws_kinesis/aws_kinesis_put_record.cc
+        exporting/aws_kinesis/aws_kinesis_put_record.h
+        )
+
+set(PUBSUB_EXPORTING_FILES
+        exporting/pubsub/pubsub.c
+        exporting/pubsub/pubsub.h
+        exporting/pubsub/pubsub_publish.cc
+        exporting/pubsub/pubsub_publish.h
+        )
+
+set(MONGODB_EXPORTING_FILES
+        exporting/mongodb/mongodb.c
+        exporting/mongodb/mongodb.h
         )
 
 set(KINESIS_BACKEND_FILES
@@ -616,6 +820,8 @@ set(MONGODB_BACKEND_FILES
         )
 
 set(DAEMON_FILES
+        daemon/buildinfo.c
+        daemon/buildinfo.h
         daemon/common.c
         daemon/common.h
         daemon/daemon.c
@@ -626,6 +832,8 @@ set(DAEMON_FILES
         daemon/main.h
         daemon/signals.c
         daemon/signals.h
+        daemon/commands.c
+        daemon/commands.h
         daemon/unit_test.c
         daemon/unit_test.h
         )
@@ -635,6 +843,7 @@ set(NETDATA_FILES
         ${DAEMON_FILES}
         ${API_PLUGIN_FILES}
         ${BACKENDS_PLUGIN_FILES}
+        ${EXPORTING_ENGINE_FILES}
         ${CHECKS_PLUGIN_FILES}
         ${HEALTH_PLUGIN_FILES}
         ${IDLEJITTER_PLUGIN_FILES}
@@ -644,6 +853,15 @@ set(NETDATA_FILES
         ${STATSD_PLUGIN_FILES}
         ${STREAMING_PLUGIN_FILES}
         ${WEB_PLUGIN_FILES}
+        ${CLAIM_PLUGIN_FILES}
+        ${SPAWN_PLUGIN_FILES}
+        ${PARSER_PLUGIN_FILES}
+)
+
+set(NETDATACLI_FILES
+        daemon/commands.h
+        cli/cli.c
+        cli/cli.h
         )
 
 include_directories(AFTER .)
@@ -663,7 +881,8 @@ add_definitions(
 # -----------------------------------------------------------------------------
 # kinesis backend
 
-IF(HAVE_KINESIS AND HAVE_AWS AND CRYPTO_LIBRARIES AND SSL_LIBRARIES AND CURL_LIBRARIES)
+IF(KINESIS_LIBRARIES AND AWS_CORE_LIBRARIES AND HAVE_AWS_EVENT_STREAM AND HAVE_AWS_COMMON AND HAVE_AWS_CHECKSUMS AND
+   CRYPTO_LIBRARIES AND SSL_LIBRARIES AND CURL_LIBRARIES)
     SET(ENABLE_BACKEND_KINESIS True)
 ELSE()
     SET(ENABLE_BACKEND_KINESIS False)
@@ -671,12 +890,33 @@ ENDIF()
 
 IF(ENABLE_BACKEND_KINESIS)
     message(STATUS "kinesis backend: enabled")
-    list(APPEND NETDATA_FILES ${KINESIS_BACKEND_FILES})
-    list(APPEND NETDATA_COMMON_LIBRARIES aws-cpp-sdk-kinesis aws-cpp-sdk-core ${CRYPTO_LIBRARIES} ${SSL_LIBRARIES} ${CURL_LIBRARIES})
-    list(APPEND NETDATA_COMMON_INCLUDE_DIRS ${CRYPTO_INCLUDE_DIRS} ${SSL_INCLUDE_DIRS} ${CURL_INCLUDE_DIRS})
+    list(APPEND NETDATA_FILES ${KINESIS_BACKEND_FILES} ${KINESIS_EXPORTING_FILES})
+    list(APPEND NETDATA_COMMON_LIBRARIES ${KINESIS_LIBRARIES} ${AWS_CORE_LIBRARIES}
+                                         ${CRYPTO_LIBRARIES} ${SSL_LIBRARIES} ${CURL_LIBRARIES})
+    list(APPEND NETDATA_COMMON_INCLUDE_DIRS ${KINESIS_INCLUDE_DIRS} ${AWS_CORE_INCLUDE_DIRS}
+                                            ${CRYPTO_INCLUDE_DIRS} ${SSL_INCLUDE_DIRS} ${CURL_INCLUDE_DIRS})
     list(APPEND NETDATA_COMMON_CFLAGS ${CRYPTO_CFLAGS_OTHER} ${SSL_CFLAGS_OTHER} ${CURL_CFLAGS_OTHER})
 ELSE()
     message(STATUS "kinesis backend: disabled (requires AWS SDK for C++)")
+ENDIF()
+
+# -----------------------------------------------------------------------------
+# Pub/Sub exporting connector
+
+IF(GRPC_LIBRARIES AND PUBSUB_LIBRARIES)
+    SET(ENABLE_EXPORTING_PUBSUB True)
+ELSE()
+    SET(ENABLE_EXPORTING_PUBSUB False)
+ENDIF()
+
+IF(ENABLE_EXPORTING_PUBSUB)
+    message(STATUS "pubsub exporting connector: enabled")
+    list(APPEND NETDATA_FILES ${PUBSUB_EXPORTING_FILES})
+    list(APPEND NETDATA_COMMON_LIBRARIES ${GRPC_LIBRARIES} ${PUBSUB_LIBRARIES})
+    list(APPEND NETDATA_COMMON_INCLUDE_DIRS ${GRPC_INCLUDE_DIRS} ${PUBSUB_INCLUDE_DIRS})
+    list(APPEND NETDATA_COMMON_CFLAGS ${GRPC_CFLAGS_OTHER} ${PUBSUB_CFLAGS_OTHER})
+ELSE()
+    message(STATUS "pubsub exporting connector: disabled (requires grpc and googleapis)")
 ENDIF()
 
 # -----------------------------------------------------------------------------
@@ -692,9 +932,9 @@ IF(ENABLE_BACKEND_PROMETHEUS_REMOTE_WRITE)
     message(STATUS "prometheus remote write backend: enabled")
 
     find_package(Protobuf REQUIRED)
-    protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS backends/prometheus/remote_write/remote_write.proto)
+    protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS exporting/prometheus/remote_write/remote_write.proto)
 
-    list(APPEND NETDATA_FILES ${PROMETHEUS_REMOTE_WRITE_BACKEND_FILES} ${PROTO_SRCS} ${PROTO_HDRS})
+    list(APPEND NETDATA_FILES ${PROMETHEUS_REMOTE_WRITE_BACKEND_FILES} ${PROMETHEUS_REMOTE_WRITE_EXPORTING_FILES} ${PROTO_SRCS} ${PROTO_HDRS})
     list(APPEND NETDATA_COMMON_LIBRARIES ${PROTOBUF_LIBRARIES} ${SNAPPY_LIBRARIES})
     list(APPEND NETDATA_COMMON_INCLUDE_DIRS ${PROTOBUF_INCLUDE_DIRS} ${SNAPPY_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
     list(APPEND NETDATA_COMMON_CFLAGS ${PROTOBUF_CFLAGS_OTHER} ${SNAPPY_CFLAGS_OTHER})
@@ -708,22 +948,48 @@ ENDIF()
 IF(libmongoc-1.0_FOUND)
     message(STATUS "mongodb backend: enabled")
 
-    list(APPEND NETDATA_FILES ${MONGODB_BACKEND_FILES})
+    list(APPEND NETDATA_FILES ${MONGODB_BACKEND_FILES} ${MONGODB_EXPORTING_FILES})
     list(APPEND NETDATA_COMMON_LIBRARIES ${MONGOC_LIBRARIES})
     list(APPEND NETDATA_COMMON_INCLUDE_DIRS ${MONGOC_INCLUDE_DIRS})
 ELSE()
     message(STATUS "mongodb backend: disabled (requires mongoc library)")
 ENDIF()
 
+set(NETDATA_COMMON_LIBRARIES ${NETDATA_COMMON_LIBRARIES} m ${CMAKE_THREAD_LIBS_INIT})
+
+set(ACLK_CAN_BUILD 1)
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/externaldeps/mosquitto/libmosquitto.a")
+    message(WARNING "Static build of mosquitto not found. Disabling ACLK")
+    set(ACLK_CAN_BUILD 0)
+ENDIF()
+
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/externaldeps/libwebsockets/libwebsockets.a")
+    message(WARNING "Static build of libwebsockets not found. Disabling ACLK")
+    set(ACLK_CAN_BUILD 0)
+ENDIF()
+
+IF(ACLK_CAN_BUILD)
+    message(STATUS "agent-cloud-link: enabled")
+    list(APPEND NETDATA_FILES ${ACLK_PLUGIN_FILES})
+    list(APPEND NETDATA_COMMON_LIBRARIES ${ACLK_STATIC_LIBS})
+    include_directories(BEFORE ${CMAKE_SOURCE_DIR}/externaldeps/libwebsockets/include)
+    IF(LINUX AND CAP_FOUND)
+        list(APPEND NETDATA_COMMON_LIBRARIES ${CAP_LIBRARIES})
+        list(APPEND NETDATA_COMMON_INCLUDE_DIRS ${CAP_INCLUDE_DIRS})
+        list(APPEND NETDATA_COMMON_CFLAGS ${CAP_CFLAGS_OTHER})
+    ENDIF()
+ELSE()
+    message(STATUS "agent-cloud-link: disabled")
+ENDIF()
+
 # -----------------------------------------------------------------------------
 # netdata
-
-set(NETDATA_COMMON_LIBRARIES ${NETDATA_COMMON_LIBRARIES} m ${CMAKE_THREAD_LIBS_INIT})
 
 IF(LINUX)
     add_executable(netdata config.h ${NETDATA_FILES}
             ${CGROUPS_PLUGIN_FILES}
             ${DISKSPACE_PLUGIN_FILES}
+            ${TIMEX_PLUGIN_FILES}
             ${PROC_PLUGIN_FILES}
             ${TC_PLUGIN_FILES}
             )
@@ -745,6 +1011,7 @@ ELSEIF(FREEBSD)
     SET(ENABLE_PLUGIN_APPS True)
     SET(ENABLE_PLUGIN_PERF False)
     SET(ENABLE_PLUGIN_SLABINFO False)
+    SET(ENABLE_PLUGIN_EBPF False)
 
 ELSEIF(MACOS)
     add_executable(netdata config.h ${NETDATA_FILES} ${MACOS_PLUGIN_FILES})
@@ -755,10 +1022,11 @@ ELSEIF(MACOS)
     SET(ENABLE_PLUGIN_APPS False)
     SET(ENABLE_PLUGIN_PERF False)
     SET(ENABLE_PLUGIN_SLABINFO False)
+    SET(ENABLE_PLUGIN_EBPF False)
 
 ENDIF()
 
-IF(ENABLE_BACKEND_KINESIS OR ENABLE_BACKEND_PROMETHEUS_REMOTE_WRITE)
+IF(ENABLE_BACKEND_KINESIS OR ENABLE_EXPORTING_PUBSUB OR ENABLE_BACKEND_PROMETHEUS_REMOTE_WRITE)
     set_property(TARGET netdata PROPERTY CXX_STANDARD 11)
     set_property(TARGET netdata PROPERTY CMAKE_CXX_STANDARD_REQUIRED ON)
 ENDIF()
@@ -780,6 +1048,15 @@ IF(XENSTAT_LIBRARIES)
 ELSE()
     SET(ENABLE_PLUGIN_XENSTAT False)
 ENDIF()
+
+
+# -----------------------------------------------------------------------------
+# netdatacli
+
+add_executable(netdatacli config.h ${NETDATACLI_FILES})
+target_link_libraries (netdatacli libnetdata ${NETDATA_COMMON_LIBRARIES})
+target_include_directories(netdatacli PUBLIC ${NETDATA_COMMON_INCLUDE_DIRS})
+target_compile_options(netdatacli PUBLIC ${NETDATA_COMMON_CFLAGS})
 
 
 # -----------------------------------------------------------------------------
@@ -853,6 +1130,20 @@ ENDIF()
 
 
 # -----------------------------------------------------------------------------
+# ebpf_process.plugin
+
+IF(ENABLE_PLUGIN_EBPF)
+    message(STATUS "ebpf.plugin: enabled")
+    add_executable(ebpf.plugin config.h ${EBPF_PROCESS_PLUGIN_FILES})
+    target_link_libraries (ebpf.plugin libnetdata ${NETDATA_COMMON_LIBRARIES})
+    target_include_directories(ebpf.plugin PUBLIC ${NETDATA_COMMON_INCLUDE_DIRS})
+    target_compile_options(ebpf.plugin PUBLIC ${NETDATA_COMMON_CFLAGS})
+ELSE()
+    message(STATUS "ebpf.plugin: disabled")
+ENDIF()
+
+
+# -----------------------------------------------------------------------------
 # slabinfo.plugin
 
 IF(ENABLE_PLUGIN_SLABINFO)
@@ -897,6 +1188,110 @@ if(BUILD_TESTING)
     target_link_libraries(storage_number_testdriver libnetdata ${NETDATA_COMMON_LIBRARIES} ${CMOCKA_LIBRARIES})
     add_test(NAME test_storage_number COMMAND storage_number_testdriver)
 
+    set(EXPORTING_ENGINE_TEST_FILES
+        exporting/tests/test_exporting_engine.c
+        exporting/tests/test_exporting_engine.h
+        exporting/tests/exporting_fixtures.c
+        exporting/tests/exporting_doubles.c
+        exporting/tests/netdata_doubles.c
+        exporting/tests/system_doubles.c
+        )
+    set(TEST_NAME exporting_engine)
+    set(PROMETHEUS_REMOTE_WRITE_LINK_OPTIONS)
+    set(KINESIS_LINK_OPTIONS)
+    set(PUBSUB_LINK_OPTIONS)
+    set(MONGODB_LINK_OPTIONS)
+if(ENABLE_BACKEND_PROMETHEUS_REMOTE_WRITE)
+    list(APPEND EXPORTING_ENGINE_FILES ${PROMETHEUS_REMOTE_WRITE_EXPORTING_FILES} ${PROTO_SRCS} ${PROTO_HDRS})
+    list(
+        APPEND PROMETHEUS_REMOTE_WRITE_LINK_OPTIONS
+        -Wl,--wrap=init_write_request
+        -Wl,--wrap=add_host_info
+        -Wl,--wrap=add_label
+        -Wl,--wrap=add_metric
+    )
+endif()
+if(ENABLE_BACKEND_KINESIS)
+    list(APPEND EXPORTING_ENGINE_FILES ${KINESIS_EXPORTING_FILES})
+    list(
+        APPEND KINESIS_LINK_OPTIONS
+        -Wl,--wrap=aws_sdk_init
+        -Wl,--wrap=kinesis_init
+        -Wl,--wrap=kinesis_put_record
+        -Wl,--wrap=kinesis_get_result
+    )
+endif()
+if(ENABLE_EXPORTING_PUBSUB)
+    list(APPEND EXPORTING_ENGINE_FILES ${PUBSUB_EXPORTING_FILES})
+    list(
+        APPEND PUBSUB_LINK_OPTIONS
+        -Wl,--wrap=pubsub_init
+        -Wl,--wrap=pubsub_add_message
+        -Wl,--wrap=pubsub_publish
+        -Wl,--wrap=pubsub_get_result
+    )
+endif()
+if(MONGOC_LIBRARIES)
+    list(APPEND EXPORTING_ENGINE_FILES ${MONGODB_EXPORTING_FILES})
+    list(
+        APPEND MONGODB_LINK_OPTIONS
+        -Wl,--wrap=mongoc_init
+        -Wl,--wrap=mongoc_uri_new_with_error
+        -Wl,--wrap=mongoc_uri_get_option_as_int32
+        -Wl,--wrap=mongoc_uri_set_option_as_int32
+        -Wl,--wrap=mongoc_client_new_from_uri
+        -Wl,--wrap=mongoc_client_set_appname
+        -Wl,--wrap=mongoc_client_get_collection
+        -Wl,--wrap=mongoc_uri_destroy
+        -Wl,--wrap=mongoc_collection_insert_many
+    )
+endif()
+    add_executable(${TEST_NAME}_testdriver ${EXPORTING_ENGINE_TEST_FILES} ${EXPORTING_ENGINE_FILES})
+    target_compile_options(
+        ${TEST_NAME}_testdriver
+        PRIVATE
+        -DUNIT_TESTING
+    )
+    target_include_directories(
+        ${TEST_NAME}_testdriver
+        PUBLIC
+        ${CMAKE_CURRENT_BINARY_DIR}
+        ${NETDATA_COMMON_INCLUDE_DIRS}
+    )
+    target_link_options(
+        ${TEST_NAME}_testdriver
+        PRIVATE
+        -Wl,--wrap=read_exporting_config
+        -Wl,--wrap=init_connectors
+        -Wl,--wrap=mark_scheduled_instances
+        -Wl,--wrap=rrdhost_is_exportable
+        -Wl,--wrap=rrdset_is_exportable
+        -Wl,--wrap=exporting_calculate_value_from_stored_data
+        -Wl,--wrap=prepare_buffers
+        -Wl,--wrap=send_internal_metrics
+        -Wl,--wrap=now_realtime_sec
+        -Wl,--wrap=uv_thread_set_name_np
+        -Wl,--wrap=uv_thread_create
+        -Wl,--wrap=uv_mutex_lock
+        -Wl,--wrap=uv_mutex_unlock
+        -Wl,--wrap=uv_cond_signal
+        -Wl,--wrap=uv_cond_wait
+        -Wl,--wrap=strdupz
+        -Wl,--wrap=info_int
+        -Wl,--wrap=recv
+        -Wl,--wrap=send
+        -Wl,--wrap=connect_to_one_of
+        -Wl,--wrap=create_main_rusage_chart
+        -Wl,--wrap=send_main_rusage
+        -Wl,--wrap=simple_connector_end_batch
+        ${PROMETHEUS_REMOTE_WRITE_LINK_OPTIONS}
+        ${KINESIS_LINK_OPTIONS}
+        ${PUBSUB_LINK_OPTIONS}
+        ${MONGODB_LINK_OPTIONS}
+    )
+    target_link_libraries(${TEST_NAME}_testdriver libnetdata ${NETDATA_COMMON_LIBRARIES} ${CMOCKA_LIBRARIES})
+    add_test(NAME test_${TEST_NAME} COMMAND ${TEST_NAME}_testdriver)
+
     set(WEB_API_TEST_FILES
         web/api/tests/web_api.c
         web/server/web_client.c
@@ -911,6 +1306,7 @@ if(BUILD_TESTING)
         -Wl,--wrap=web_client_api_request_v1
         -Wl,--wrap=rrdhost_find_by_guid
         -Wl,--wrap=rrdset_find_byname
+        -Wl,--wrap=sql_create_host_by_uuid
         -Wl,--wrap=rrdset_find
         -Wl,--wrap=rrdpush_receiver_thread_spawn
         -Wl,--wrap=debug_int
@@ -919,7 +1315,7 @@ if(BUILD_TESTING)
         -Wl,--wrap=fatal_int
     )
     target_link_libraries(web_api_testdriver libnetdata ${NETDATA_COMMON_LIBRARIES} ${CMOCKA_LIBRARIES})
-    add_test(NAME test_web_api COMMAND web_api_testdriver)
+#    add_test(NAME test_web_api COMMAND web_api_testdriver)
 
     set(VALID_URLS_TEST_FILES
         web/api/tests/valid_urls.c
@@ -935,6 +1331,7 @@ if(BUILD_TESTING)
         -Wl,--wrap=web_client_api_request_v1
         -Wl,--wrap=rrdhost_find_by_guid
         -Wl,--wrap=rrdset_find_byname
+        -Wl,--wrap=sql_create_host_by_uuid
         -Wl,--wrap=rrdset_find
         -Wl,--wrap=rrdpush_receiver_thread_spawn
         -Wl,--wrap=debug_int
@@ -945,16 +1342,33 @@ if(BUILD_TESTING)
         -DREMOVE_MYSENDFILE
     )
     target_link_libraries(valid_urls_testdriver libnetdata ${NETDATA_COMMON_LIBRARIES} ${CMOCKA_LIBRARIES})
-    add_test(NAME test_valid_urls COMMAND valid_urls_testdriver)
+#    add_test(NAME test_valid_urls COMMAND valid_urls_testdriver)
+
+    set(CGROUPS_TEST_FILES
+        collectors/cgroups.plugin/tests/test_cgroups_plugin.c
+        collectors/cgroups.plugin/tests/test_cgroups_plugin.h
+        collectors/cgroups.plugin/tests/test_doubles.c
+        database/rrdlabels.c
+        database/rrd.h
+    )
+    add_executable(cgroups_testdriver ${CGROUPS_TEST_FILES} ${CGROUPS_PLUGIN_FILES})
+    target_link_options(
+        cgroups_testdriver
+        PRIVATE
+        -Wl,--wrap=add_label_to_list
+    )
+    target_link_libraries(cgroups_testdriver libnetdata ${NETDATA_COMMON_LIBRARIES} ${CMOCKA_LIBRARIES})
+    add_test(NAME test_cgroups COMMAND cgroups_testdriver)
 
     set_target_properties(
         str2ld_testdriver
         storage_number_testdriver
+        exporting_engine_testdriver
         web_api_testdriver
         valid_urls_testdriver
+        cgroups_testdriver
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY tests
     )
-
 
 endif()
 endif()

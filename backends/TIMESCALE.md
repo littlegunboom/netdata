@@ -1,3 +1,8 @@
+<!--
+title: "Writing metrics to TimescaleDB"
+custom_edit_url: https://github.com/netdata/netdata/edit/master/backends/TIMESCALE.md
+-->
+
 # Writing metrics to TimescaleDB
 
 Thanks to Netdata's community of developers and system administrators, and Mahlon Smith
@@ -22,7 +27,7 @@ TimescaleDB.
 Finally, another member of Netdata's community has built a project that quickly launches Netdata, TimescaleDB, and
 Grafana in easy-to-manage Docker containers. Rune Juhl Jacobsen's
 [project](https://github.com/runejuhl/grafana-timescaledb) uses a `Makefile` to create everything, which makes it
-perferct for testing and experimentation.
+perfect for testing and experimentation.
 
 ## Netdata&#8596;TimescaleDB in action
 

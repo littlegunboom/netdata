@@ -7,10 +7,13 @@ CLEANFILES = \
     netdata-openrc \
     netdata.logrotate \
     netdata.service \
+    netdata.service.v235 \
     netdata-init-d \
     netdata-lsb \
     netdata-freebsd \
     netdata.plist \
+    netdata.crontab \
+    netdata-updater.service \
     $(NULL)
 
 include $(top_srcdir)/build/subst.inc
@@ -28,10 +31,13 @@ nodist_noinst_DATA = \
     netdata-openrc \
     netdata.logrotate \
     netdata.service \
+    netdata.service.v235 \
     netdata-init-d \
     netdata-lsb \
     netdata-freebsd \
     netdata.plist \
+    netdata.crontab \
+    netdata-updater.service \
     $(NULL)
 
 dist_noinst_DATA = \
@@ -39,9 +45,13 @@ dist_noinst_DATA = \
     netdata-openrc.in \
     netdata.logrotate.in \
     netdata.service.in \
+    netdata.service.v235.in \
     netdata-init-d.in \
     netdata-lsb.in \
     netdata-freebsd.in \
     netdata.plist.in \
     netdata.conf \
+    netdata.crontab.in \
+    netdata-updater.service.in \
+    netdata-updater.timer \
     $(NULL)

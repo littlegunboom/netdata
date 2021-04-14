@@ -1,3 +1,8 @@
+<!--
+title: "Privacy Policy"
+custom_edit_url: https://github.com/netdata/netdata/edit/master/docs/privacy-policy.md
+-->
+
 # Privacy Policy
 
 ## 1. Preamble
@@ -54,7 +59,7 @@ same view. The global registry keeps track of 4 entities:
 For _persons/accounts_ and _machines_, the registry keeps links to _URLs_, each link with 2 timestamps (first time seen, last time seen) and a counter (number of times it has been seen).
 _machines_, _persons_, and timestamps are stored in the Netdata registry regardless of whether you sign in or not.
 
-If sending this information is against your policies, you can [run your own registry](../registry/#run-your-own-registry). 
+If sending this information is against your policies, you can [run your own registry](/registry/README.md#run-your-own-registry). 
 Note that ND versions with the 'Sign in' feature of the ND Cloud do not use the global registry. 
 
 ND Cloud: When you sign up to obtain a user account via the 'Sign in' link on the ND agent user interface, ND is granted access to personal information in the user profile of the authentication provider you choose (e.g. GitHub or Google). ND collects and uses this personal information pursuant to its legitimate interest in establishing and maintaining your account providing you with the features we provide Registered Users. We may use your email address to contact you regarding changes to this policy or other applicable policies. The login name or email address of your profile may be used to attribute you in connection with any content you submit to any Service. 
@@ -74,7 +79,7 @@ The statistics calculated from this information are used for:
 
 2.  **Usage statistics**, to help us focus on the parts of Netdata that are used the most, or help us identify the extend our development decisions influence the community.
 
-To opt-out from sending anonymous statistics, you can create reate a file called `.opt-out-from-anonymous-statistics` under the user configuration directory (usually `/etc/netdata`).
+To opt-out from sending anonymous statistics, you can create a file called `.opt-out-from-anonymous-statistics` under the user configuration directory (usually `/etc/netdata`).
 
 Emails and Newsletters: When you sign up to receive updates from Netdata or otherwise subscribe to one of our mailing lists, you will be asked to provide some personal information. ND collects and uses this personal information pursuant to its legitimate interest in providing news and updates to, and collaborating with, its supporters and volunteers.
 

@@ -29,7 +29,6 @@ dist_python_DATA = \
 
 userpythonconfigdir=$(configdir)/python.d
 dist_userpythonconfig_DATA = \
-    .keep \
     $(NULL)
 
 # Explicitly install directories to avoid permission issues due to umask
@@ -41,7 +40,9 @@ dist_pythonconfig_DATA = \
     $(NULL)
 
 include adaptec_raid/Makefile.inc
+include alarms/Makefile.inc
 include am2320/Makefile.inc
+include anomalies/Makefile.inc
 include apache/Makefile.inc
 include beanstalk/Makefile.inc
 include bind_rndc/Makefile.inc
@@ -64,6 +65,7 @@ include go_expvar/Makefile.inc
 include haproxy/Makefile.inc
 include hddtemp/Makefile.inc
 include httpcheck/Makefile.inc
+include hpssa/Makefile.inc
 include icecast/Makefile.inc
 include ipfs/Makefile.inc
 include isc_dhcpd/Makefile.inc
@@ -103,7 +105,6 @@ include squid/Makefile.inc
 include tomcat/Makefile.inc
 include tor/Makefile.inc
 include traefik/Makefile.inc
-include unbound/Makefile.inc
 include uwsgi/Makefile.inc
 include varnish/Makefile.inc
 include w1sensor/Makefile.inc
@@ -142,6 +143,7 @@ dist_third_party_DATA = \
     python_modules/third_party/mcrcon.py \
     python_modules/third_party/boinc_client.py \
     python_modules/third_party/monotonic.py \
+    python_modules/third_party/filelock.py \
     $(NULL)
 
 pythonyaml2dir=$(pythonmodulesdir)/pyyaml2

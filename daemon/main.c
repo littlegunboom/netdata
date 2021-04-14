@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "common.h"
+#include "buildinfo.h"
 
 int netdata_zero_metrics_enabled;
 int netdata_anonymous_statistics_enabled;
 
 struct config netdata_config = {
-        .sections = NULL,
+        .first_section = NULL,
+        .last_section = NULL,
         .mutex = NETDATA_MUTEX_INITIALIZER,
         .index = {
                 .avl_tree = {
@@ -27,6 +29,10 @@ void netdata_cleanup_and_exit(int ret) {
 
     send_statistics("EXIT", ret?"ERROR":"OK","-");
 
+    char agent_crash_file[FILENAME_MAX + 1];
+    snprintfz(agent_crash_file, FILENAME_MAX, "%s/.agent_crash", netdata_configured_varlib_dir);
+    (void) unlink(agent_crash_file);
+
     // cleanup/save the database and exit
     info("EXIT: cleaning up the database...");
     rrdhost_cleanup_all();
@@ -35,13 +41,20 @@ void netdata_cleanup_and_exit(int ret) {
         // exit cleanly
 
         // stop everything
-        info("EXIT: stopping master threads...");
+        info("EXIT: stopping static threads...");
         cancel_main_threads();
 
         // free the database
         info("EXIT: freeing database memory...");
+#ifdef ENABLE_DBENGINE
+        rrdeng_prepare_exit(&multidb_ctx);
+#endif
         rrdhost_free_all();
+#ifdef ENABLE_DBENGINE
+        rrdeng_exit(&multidb_ctx);
+#endif
     }
+    sql_close_database();
 
     // unlink the pid
     if(pidfile[0]) {
@@ -53,7 +66,6 @@ void netdata_cleanup_and_exit(int ret) {
 #ifdef ENABLE_HTTPS
     security_clean_openssl();
 #endif
-
     info("EXIT: all done - netdata is now exiting - bye bye...");
     exit(ret);
 }
@@ -67,14 +79,20 @@ struct netdata_static_thread static_threads[] = {
     // linux internal plugins
     NETDATA_PLUGIN_HOOK_LINUX_PROC
     NETDATA_PLUGIN_HOOK_LINUX_DISKSPACE
+    NETDATA_PLUGIN_HOOK_LINUX_TIMEX
     NETDATA_PLUGIN_HOOK_LINUX_CGROUPS
     NETDATA_PLUGIN_HOOK_LINUX_TC
 
     NETDATA_PLUGIN_HOOK_IDLEJITTER
     NETDATA_PLUGIN_HOOK_STATSD
 
+#if defined(ENABLE_ACLK) || defined(ACLK_NG)
+    NETDATA_ACLK_HOOK
+#endif
+
         // common plugins for all systems
     {"BACKENDS",             NULL,                    NULL,         1, NULL, NULL, backends_main},
+    {"EXPORTING",            NULL,                    NULL,         1, NULL, NULL, exporting_main},
     {"WEB_SERVER[static1]",  NULL,                    NULL,         0, NULL, NULL, socket_listen_main_static_threaded},
     {"STREAM",               NULL,                    NULL,         0, NULL, NULL, rrdpush_sender_thread},
 
@@ -106,6 +124,7 @@ int make_dns_decision(const char *section_name, const char *config_name, const c
     if(strcmp("heuristic",value))
         error("Invalid configuration option '%s' for '%s'/'%s'. Valid options are 'yes', 'no' and 'heuristic'. Proceeding with 'heuristic'",
               value, section_name, config_name);
+
     return simple_pattern_is_potential_name(p);
 }
 
@@ -151,9 +170,9 @@ void web_server_config_options(void)
                                                        "localhost fd* 10.* 192.168.* 172.16.* 172.17.* 172.18.*"
                                                        " 172.19.* 172.20.* 172.21.* 172.22.* 172.23.* 172.24.*"
                                                        " 172.25.* 172.26.* 172.27.* 172.28.* 172.29.* 172.30.*"
-                                                       " 172.31.*"), NULL, SIMPLE_PATTERN_EXACT);
+                                                       " 172.31.* UNKNOWN"), NULL, SIMPLE_PATTERN_EXACT);
     web_allow_netdataconf_dns  =
-        make_dns_decision(CONFIG_SECTION_WEB, "allow netdata.conf by dns", "no", web_allow_mgmt_from);
+        make_dns_decision(CONFIG_SECTION_WEB, "allow netdata.conf by dns", "no", web_allow_netdataconf_from);
     web_allow_mgmt_from        =
         simple_pattern_create(config_get(CONFIG_SECTION_WEB, "allow management from", "localhost"),
                               NULL, SIMPLE_PATTERN_EXACT);
@@ -226,7 +245,7 @@ void cancel_main_threads() {
     usec_t max = 5 * USEC_PER_SEC, step = 100000;
     for (i = 0; static_threads[i].name != NULL ; i++) {
         if(static_threads[i].enabled == NETDATA_MAIN_THREAD_RUNNING) {
-            info("EXIT: Stopping master thread: %s", static_threads[i].name);
+            info("EXIT: Stopping main thread: %s", static_threads[i].name);
             netdata_thread_cancel(*static_threads[i].thread);
             found++;
         }
@@ -248,7 +267,7 @@ void cancel_main_threads() {
     if(found) {
         for (i = 0; static_threads[i].name != NULL ; i++) {
             if (static_threads[i].enabled != NETDATA_MAIN_THREAD_EXITED)
-                error("Master thread %s takes too long to exit. Giving up...", static_threads[i].name);
+                error("Main thread %s takes too long to exit. Giving up...", static_threads[i].name);
         }
     }
     else
@@ -300,13 +319,13 @@ int help(int exitcode) {
             " |   '-'   '-'   '-'   '-'   real-time performance monitoring, done right!   \n"
             " +----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+--->\n"
             "\n"
-            " Copyright (C) 2016-2017, Costa Tsaousis <costa@tsaousis.gr>\n"
+            " Copyright (C) 2016-2020, Netdata, Inc. <info@netdata.cloud>\n"
             " Released under GNU General Public License v3 or later.\n"
             " All rights reserved.\n"
             "\n"
-            " Home Page  : https://my-netdata.io\n"
+            " Home Page  : https://netdata.cloud\n"
             " Source Code: https://github.com/netdata/netdata\n"
-            " Wiki / Docs: https://github.com/netdata/netdata/wiki\n"
+            " Docs       : https://learn.netdata.cloud\n"
             " Support    : https://github.com/netdata/netdata/issues\n"
             " License    : https://github.com/netdata/netdata/blob/master/LICENSE.md\n"
             "\n"
@@ -337,15 +356,19 @@ int help(int exitcode) {
             "  -W unittest              Run internal unittests and exit.\n\n"
 #ifdef ENABLE_DBENGINE
             "  -W createdataset=N       Create a DB engine dataset of N seconds and exit.\n\n"
-            "  -W stresstest=A,B,C,D,E  Run a DB engine stress test for A seconds,\n"
+            "  -W stresstest=A,B,C,D,E,F\n"
+            "                           Run a DB engine stress test for A seconds,\n"
             "                           with B writers and C readers, with a ramp up\n"
             "                           time of D seconds for writers, a page cache\n"
-            "                           size of E MiB, and exit.\n\n"
+            "                           size of E MiB, an optional disk space limit"
+            "                           of F MiB and exit.\n\n"
 #endif
             "  -W set section option value\n"
             "                           set netdata.conf option from the command line.\n\n"
             "  -W simple-pattern pattern string\n"
             "                           Check if string matches pattern and exit.\n\n"
+            "  -W \"claim -token=TOKEN -rooms=ROOM1,ROOM2\"\n"
+            "                           Claim the agent to the workspace rooms pointed to by TOKEN and ROOM*.\n\n"
     );
 
     fprintf(stream, "\n Signals netdata handles:\n\n"
@@ -394,6 +417,9 @@ static void security_init(){
     snprintfz(filename, FILENAME_MAX, "%s/ssl/cert.pem",netdata_configured_user_config_dir);
     security_cert    = config_get(CONFIG_SECTION_WEB, "ssl certificate",  filename);
 
+    tls_version    = config_get(CONFIG_SECTION_WEB, "tls version",  "1.3");
+    tls_ciphers    = config_get(CONFIG_SECTION_WEB, "tls ciphers",  "none");
+
     security_openssl_library();
 }
 #endif
@@ -419,6 +445,14 @@ static void log_init(void) {
 
     setenv("NETDATA_ERRORS_THROTTLE_PERIOD", config_get(CONFIG_SECTION_GLOBAL, "errors flood protection period"    , ""), 1);
     setenv("NETDATA_ERRORS_PER_PERIOD",      config_get(CONFIG_SECTION_GLOBAL, "errors to trigger flood protection", ""), 1);
+}
+
+char *initialize_lock_directory_path(char *prefix)
+{
+    char filename[FILENAME_MAX + 1];
+    snprintfz(filename, FILENAME_MAX, "%s/lock", prefix);
+
+    return config_get(CONFIG_SECTION_GLOBAL, "lock directory", filename);
 }
 
 static void backwards_compatible_config() {
@@ -514,7 +548,10 @@ static void get_netdata_configured_variables() {
     netdata_configured_web_dir          = config_get(CONFIG_SECTION_GLOBAL, "web files directory",    netdata_configured_web_dir);
     netdata_configured_cache_dir        = config_get(CONFIG_SECTION_GLOBAL, "cache directory",        netdata_configured_cache_dir);
     netdata_configured_varlib_dir       = config_get(CONFIG_SECTION_GLOBAL, "lib directory",          netdata_configured_varlib_dir);
-    netdata_configured_home_dir         = config_get(CONFIG_SECTION_GLOBAL, "home directory",         netdata_configured_home_dir);
+    char *env_home=getenv("HOME");
+    netdata_configured_home_dir         = config_get(CONFIG_SECTION_GLOBAL, "home directory",         env_home?env_home:netdata_configured_home_dir);
+
+    netdata_configured_lock_dir = initialize_lock_directory_path(netdata_configured_varlib_dir);
 
     {
         pluginsd_initialize_plugin_directories();
@@ -544,6 +581,13 @@ static void get_netdata_configured_variables() {
         error("Invalid dbengine disk space %d given. Defaulting to %d.", default_rrdeng_disk_quota_mb, RRDENG_MIN_DISK_SPACE_MB);
         default_rrdeng_disk_quota_mb = RRDENG_MIN_DISK_SPACE_MB;
     }
+
+    default_multidb_disk_quota_mb = (int) config_get_number(CONFIG_SECTION_GLOBAL, "dbengine multihost disk space", compute_multidb_diskspace());
+    if(default_multidb_disk_quota_mb < RRDENG_MIN_DISK_SPACE_MB) {
+        error("Invalid multidb disk space %d given. Defaulting to %d.", default_multidb_disk_quota_mb, default_rrdeng_disk_quota_mb);
+        default_multidb_disk_quota_mb = default_rrdeng_disk_quota_mb;
+    }
+
 #endif
     // ------------------------------------------------------------------------
 
@@ -563,6 +607,8 @@ static void get_netdata_configured_variables() {
     get_system_HZ();
     get_system_cpus();
     get_system_pid_max();
+
+
 }
 
 static void get_system_timezone(void) {
@@ -670,9 +716,21 @@ void set_global_environment() {
     setenv("NETDATA_WEB_DIR"          , verify_required_directory(netdata_configured_web_dir),          1);
     setenv("NETDATA_CACHE_DIR"        , verify_required_directory(netdata_configured_cache_dir),        1);
     setenv("NETDATA_LIB_DIR"          , verify_required_directory(netdata_configured_varlib_dir),       1);
+    setenv("NETDATA_LOCK_DIR"         , netdata_configured_lock_dir, 1);
     setenv("NETDATA_LOG_DIR"          , verify_required_directory(netdata_configured_log_dir),          1);
     setenv("HOME"                     , verify_required_directory(netdata_configured_home_dir),         1);
     setenv("NETDATA_HOST_PREFIX"      , netdata_configured_host_prefix, 1);
+
+    char *default_port = appconfig_get(&netdata_config, CONFIG_SECTION_WEB, "default port", NULL);
+    int clean = 0;
+    if (!default_port) {
+        default_port = strdupz("19999");
+        clean = 1;
+    }
+
+    setenv("NETDATA_LISTEN_PORT"      , default_port, 1);
+    if(clean)
+        freez(default_port);
 
     get_system_timezone();
 
@@ -700,20 +758,20 @@ static int load_netdata_conf(char *filename, char overwrite_used) {
     int ret = 0;
 
     if(filename && *filename) {
-        ret = config_load(filename, overwrite_used);
+        ret = config_load(filename, overwrite_used, NULL);
         if(!ret)
             error("CONFIG: cannot load config file '%s'.", filename);
     }
     else {
         filename = strdupz_path_subpath(netdata_configured_user_config_dir, "netdata.conf");
 
-        ret = config_load(filename, overwrite_used);
+        ret = config_load(filename, overwrite_used, NULL);
         if(!ret) {
             info("CONFIG: cannot load user config '%s'. Will try the stock version.", filename);
             freez(filename);
 
             filename = strdupz_path_subpath(netdata_configured_stock_config_dir, "netdata.conf");
-            ret = config_load(filename, overwrite_used);
+            ret = config_load(filename, overwrite_used, NULL);
             if(!ret)
                 info("CONFIG: cannot load stock config '%s'. Running with internal defaults.", filename);
         }
@@ -722,6 +780,12 @@ static int load_netdata_conf(char *filename, char overwrite_used) {
     }
 
     return ret;
+}
+
+// coverity[ +tainted_string_sanitize_content : arg-0 ]
+static inline void coverity_remove_taint(char *s)
+{
+    (void)s;
 }
 
 int get_system_info(struct rrdhost_system_info *system_info) {
@@ -740,27 +804,27 @@ int get_system_info(struct rrdhost_system_info *system_info) {
 
     FILE *fp = mypopen(script, &command_pid);
     if(fp) {
-        char buffer[200 + 1];
-        while (fgets(buffer, 200, fp) != NULL) {
-            char *name=buffer;
-            char *value=buffer;
+        char line[200 + 1];
+        // Removed the double strlens, if the Coverity tainted string warning reappears I'll revert.
+        // One time init code, but I'm curious about the warning...
+        while (fgets(line, 200, fp) != NULL) {
+            char *value=line;
             while (*value && *value != '=') value++;
             if (*value=='=') {
                 *value='\0';
                 value++;
-                if (strlen(value)>1) {
-                    char *newline = value + strlen(value) - 1;
-                    (*newline) = '\0';
-                }
-                char n[51], v[101];
-                snprintfz(n, 50,"%s",name);
-                snprintfz(v, 100,"%s",value);
-                if(unlikely(rrdhost_set_system_info_variable(system_info, n, v))) {
-                    info("Unexpected environment variable %s=%s", n, v);
+                char *end = value;
+                while (*end && *end != '\n') end++;
+                *end = '\0';    // Overwrite newline if present
+                coverity_remove_taint(line);    // I/O is controlled result of system_info.sh - not tainted
+                coverity_remove_taint(value);
+
+                if(unlikely(rrdhost_set_system_info_variable(system_info, line, value))) {
+                    info("Unexpected environment variable %s=%s", line, value);
                 }
                 else {
-                    info("%s=%s", n, v);
-                    setenv(n, v, 1);
+                    info("%s=%s", line, value);
+                    setenv(line, value, 1);
                 }
             }
         }
@@ -772,6 +836,7 @@ int get_system_info(struct rrdhost_system_info *system_info) {
 
 void send_statistics( const char *action, const char *action_result, const char *action_data) {
     static char *as_script;
+
     if (netdata_anonymous_statistics_enabled == -1) {
         char *optout_file = mallocz(sizeof(char) * (strlen(netdata_configured_user_config_dir) +strlen(".opt-out-from-anonymous-statistics") + 2));
         sprintf(optout_file, "%s/%s", netdata_configured_user_config_dir, ".opt-out-from-anonymous-statistics");
@@ -816,17 +881,47 @@ void set_silencers_filename() {
     silencers_filename = config_get(CONFIG_SECTION_HEALTH, "silencers file", filename);
 }
 
+/* Any config setting that can be accessed without a default value i.e. configget(...,...,NULL) *MUST*
+   be set in this procedure to be called in all the relevant code paths.
+*/
+void post_conf_load(char **user)
+{
+    // --------------------------------------------------------------------
+    // get the user we should run
+
+    // IMPORTANT: this is required before web_files_uid()
+    if(getuid() == 0) {
+        *user = config_get(CONFIG_SECTION_GLOBAL, "run as user", NETDATA_USER);
+    }
+    else {
+        struct passwd *passwd = getpwuid(getuid());
+        *user = config_get(CONFIG_SECTION_GLOBAL, "run as user", (passwd && passwd->pw_name)?passwd->pw_name:"");
+    }
+
+    // --------------------------------------------------------------------
+    // Check if the cloud is enabled
+#if defined( DISABLE_CLOUD ) || !defined( ENABLE_ACLK )
+    netdata_cloud_setting = 0;
+#else
+    netdata_cloud_setting = appconfig_get_boolean(&cloud_config, CONFIG_SECTION_GLOBAL, "enabled", 1);
+#endif
+    // This must be set before any point in the code that accesses it. Do not move it from this function.
+    appconfig_get(&cloud_config, CONFIG_SECTION_GLOBAL, "cloud base url", DEFAULT_CLOUD_BASE_URL);
+}
+
 int main(int argc, char **argv) {
     int i;
     int config_loaded = 0;
     int dont_fork = 0;
     size_t default_stacksize;
+    char *user = NULL;
+
 
     netdata_ready=0;
     // set the name for logging
     program_name = "netdata";
 
-    // parse depercated options
+    // parse deprecated options
     // TODO: Remove this block with the next major release.
     {
         i = 1;
@@ -853,6 +948,11 @@ int main(int argc, char **argv) {
             }
             else i++;
         }
+    }
+    if (argc > 1 && strcmp(argv[1], SPAWN_SERVER_COMMAND_LINE_ARGUMENT) == 0) {
+        // don't run netdata, this is the spawn server
+        spawn_server();
+        exit(0);
     }
 
     // parse options
@@ -883,6 +983,8 @@ int main(int argc, char **argv) {
                     }
                     else {
                         debug(D_OPTIONS, "Configuration loaded from %s.", optarg);
+                        post_conf_load(&user);
+                        load_cloud_conf(1);
                         config_loaded = 1;
                     }
                     break;
@@ -921,6 +1023,7 @@ int main(int argc, char **argv) {
                     {
                         char* stacksize_string = "stacksize=";
                         char* debug_flags_string = "debug_flags=";
+                        char* claim_string = "claim";
 #ifdef ENABLE_DBENGINE
                         char* createdataset_string = "createdataset=";
                         char* stresstest_string = "stresstest=";
@@ -929,11 +1032,17 @@ int main(int argc, char **argv) {
                         if(strcmp(optarg, "unittest") == 0) {
                             if(unit_test_buffer()) return 1;
                             if(unit_test_str2ld()) return 1;
+                            // No call to load the config file on this code-path
+                            post_conf_load(&user);
                             get_netdata_configured_variables();
                             default_rrd_update_every = 1;
                             default_rrd_memory_mode = RRD_MEMORY_MODE_RAM;
                             default_health_enabled = 0;
-                            rrd_init("unittest", NULL);
+                            registry_init();
+                            if(rrd_init("unittest", NULL)) {
+                                fprintf(stderr, "rrd_init failed for unittest\n");
+                                return 1;
+                            }
                             default_rrdpush_enabled = 0;
                             if(run_all_mockup_tests()) return 1;
                             if(unit_test_storage()) return 1;
@@ -953,7 +1062,7 @@ int main(int argc, char **argv) {
                         else if(strncmp(optarg, stresstest_string, strlen(stresstest_string)) == 0) {
                             char *endptr;
                             unsigned test_duration_sec = 0, dset_charts = 0, query_threads = 0, ramp_up_seconds = 0,
-                            page_cache_mb = 0;
+                            page_cache_mb = 0, disk_space_mb = 0;
 
                             optarg += strlen(stresstest_string);
                             test_duration_sec = (unsigned)strtoul(optarg, &endptr, 0);
@@ -965,8 +1074,11 @@ int main(int argc, char **argv) {
                                 ramp_up_seconds = (unsigned)strtoul(endptr + 1, &endptr, 0);
                             if (',' == *endptr)
                                 page_cache_mb = (unsigned)strtoul(endptr + 1, &endptr, 0);
+                            if (',' == *endptr)
+                                disk_space_mb = (unsigned)strtoul(endptr + 1, &endptr, 0);
+
                             dbengine_stress_test(test_duration_sec, dset_charts, query_threads, ramp_up_seconds,
-                                                 page_cache_mb);
+                                                 page_cache_mb, disk_space_mb);
                             return 0;
                         }
 #endif
@@ -995,21 +1107,21 @@ int main(int argc, char **argv) {
                                 return 1;
                             }
 
-                            const char *heystack = argv[optind];
+                            const char *haystack = argv[optind];
                             const char *needle = argv[optind + 1];
                             size_t len = strlen(needle) + 1;
                             char wildcarded[len];
 
-                            SIMPLE_PATTERN *p = simple_pattern_create(heystack, NULL, SIMPLE_PATTERN_EXACT);
+                            SIMPLE_PATTERN *p = simple_pattern_create(haystack, NULL, SIMPLE_PATTERN_EXACT);
                             int ret = simple_pattern_matches_extract(p, needle, wildcarded, len);
                             simple_pattern_free(p);
 
                             if(ret) {
-                                fprintf(stdout, "RESULT: MATCHED - pattern '%s' matches '%s', wildcarded '%s'\n", heystack, needle, wildcarded);
+                                fprintf(stdout, "RESULT: MATCHED - pattern '%s' matches '%s', wildcarded '%s'\n", haystack, needle, wildcarded);
                                 return 0;
                             }
                             else {
-                                fprintf(stdout, "RESULT: NOT MATCHED - pattern '%s' does not match '%s', wildcarded '%s'\n", heystack, needle, wildcarded);
+                                fprintf(stdout, "RESULT: NOT MATCHED - pattern '%s' does not match '%s', wildcarded '%s'\n", haystack, needle, wildcarded);
                                 return 1;
                             }
                         }
@@ -1052,6 +1164,39 @@ int main(int argc, char **argv) {
 
                             // fprintf(stderr, "SET section '%s', key '%s', value '%s'\n", section, key, value);
                         }
+                        else if(strcmp(optarg, "set2") == 0) {
+                            if(optind + 4 > argc) {
+                                fprintf(stderr, "%s", "\nUSAGE: -W set 'conf_file' 'section' 'key' 'value'\n\n"
+                                        " Overwrites settings of netdata.conf or cloud.conf\n"
+                                        "\n"
+                                        " These options interact with: -c netdata.conf\n"
+                                        " If -c netdata.conf is given on the command line,\n"
+                                        " before -W set... the user may overwrite command\n"
+                                        " line parameters at netdata.conf\n"
+                                        " If -c netdata.conf is given after (or missing)\n"
+                                        " -W set... the user cannot overwrite the command line\n"
+                                        " parameters."
+                                        " conf_file can be \"cloud\" or \"netdata\".\n"
+                                        "\n"
+                                );
+                                return 1;
+                            }
+                            const char *conf_file = argv[optind]; /* "cloud" is cloud.conf, otherwise netdata.conf */
+                            struct config *tmp_config = strcmp(conf_file, "cloud") ? &netdata_config : &cloud_config;
+                            const char *section = argv[optind + 1];
+                            const char *key = argv[optind + 2];
+                            const char *value = argv[optind + 3];
+                            optind += 4;
+
+                            // set this one as the default
+                            // only if it is not already set in the config file
+                            // so the caller can use -c netdata.conf before or
+                            // after this parameter to prevent or allow overwriting
+                            // variables at netdata.conf
+                            appconfig_set_default(tmp_config, section, key,  value);
+
+                            // fprintf(stderr, "SET section '%s', key '%s', value '%s'\n", section, key, value);
+                        }
                         else if(strcmp(optarg, "get") == 0) {
                             if(optind + 3 > argc) {
                                 fprintf(stderr, "%s", "\nUSAGE: -W get 'section' 'key' 'value'\n\n"
@@ -1067,6 +1212,7 @@ int main(int argc, char **argv) {
                             if(!config_loaded) {
                                 fprintf(stderr, "warning: no configuration file has been loaded. Use -c CONFIG_FILE, before -W get. Using default config.\n");
                                 load_netdata_conf(NULL, 0);
+                                post_conf_load(&user);
                             }
 
                             get_netdata_configured_variables();
@@ -1076,6 +1222,50 @@ int main(int argc, char **argv) {
                             const char *def = argv[optind + 2];
                             const char *value = config_get(section, key, def);
                             printf("%s\n", value);
+                            return 0;
+                        }
+                        else if(strcmp(optarg, "get2") == 0) {
+                            if(optind + 4 > argc) {
+                                fprintf(stderr, "%s", "\nUSAGE: -W get2 'conf_file' 'section' 'key' 'value'\n\n"
+                                        " Prints settings of netdata.conf or cloud.conf\n"
+                                        "\n"
+                                        " These options interact with: -c netdata.conf\n"
+                                        " -c netdata.conf has to be given before -W get2.\n"
+                                        " conf_file can be \"cloud\" or \"netdata\".\n"
+                                        "\n"
+                                );
+                                return 1;
+                            }
+
+                            if(!config_loaded) {
+                                fprintf(stderr, "warning: no configuration file has been loaded. Use -c CONFIG_FILE, before -W get. Using default config.\n");
+                                load_netdata_conf(NULL, 0);
+                                post_conf_load(&user);
+                                load_cloud_conf(1);
+                            }
+
+                            get_netdata_configured_variables();
+
+                            const char *conf_file = argv[optind]; /* "cloud" is cloud.conf, otherwise netdata.conf */
+                            struct config *tmp_config = strcmp(conf_file, "cloud") ? &netdata_config : &cloud_config;
+                            const char *section = argv[optind + 1];
+                            const char *key = argv[optind + 2];
+                            const char *def = argv[optind + 3];
+                            const char *value = appconfig_get(tmp_config, section, key, def);
+                            printf("%s\n", value);
+                            return 0;
+                        }
+                        else if(strncmp(optarg, claim_string, strlen(claim_string)) == 0) {
+                            /* will trigger a claiming attempt when the agent is initialized */
+                            claiming_pending_arguments = optarg + strlen(claim_string);
+                        }
+                        else if(strcmp(optarg, "buildinfo") == 0) {
+                            printf("Version: %s %s\n", program_name, program_version);
+                            print_build_info();
+                            return 0;
+                        }
+                        else if(strcmp(optarg, "buildinfojson") == 0) {
+                            print_build_info_json();
                             return 0;
                         }
                         else {
@@ -1103,7 +1293,12 @@ int main(int argc, char **argv) {
 #endif
 
     if(!config_loaded)
+    {
         load_netdata_conf(NULL, 0);
+        post_conf_load(&user);
+        load_cloud_conf(0);
+    }
+
 
     // ------------------------------------------------------------------------
     // initialize netdata
@@ -1118,6 +1313,7 @@ int main(int argc, char **argv) {
             mallopt(M_ARENA_MAX, 1);
 #endif
         test_clock_boottime();
+        test_clock_monotonic_coarse();
 
         // prepare configuration environment variables for the plugins
 
@@ -1129,9 +1325,10 @@ int main(int argc, char **argv) {
         // files using relative filenames
         if(chdir(netdata_configured_user_config_dir) == -1)
             fatal("Cannot cd to '%s'", netdata_configured_user_config_dir);
-    }
 
-    char *user = NULL;
+        // Get execution path before switching user to avoid permission issues
+        get_netdata_execution_path();
+    }
 
     {
         // --------------------------------------------------------------------
@@ -1199,19 +1396,6 @@ int main(int argc, char **argv) {
 
 
         // --------------------------------------------------------------------
-        // get the user we should run
-
-        // IMPORTANT: this is required before web_files_uid()
-        if(getuid() == 0) {
-            user = config_get(CONFIG_SECTION_GLOBAL, "run as user", NETDATA_USER);
-        }
-        else {
-            struct passwd *passwd = getpwuid(getuid());
-            user = config_get(CONFIG_SECTION_GLOBAL, "run as user", (passwd && passwd->pw_name)?passwd->pw_name:"");
-        }
-
-
-        // --------------------------------------------------------------------
         // create the listening sockets
 
         web_client_api_v1_init();
@@ -1254,6 +1438,19 @@ int main(int argc, char **argv) {
 
     netdata_threads_init_after_fork((size_t)config_get_number(CONFIG_SECTION_GLOBAL, "pthread stack size", (long)default_stacksize));
 
+    // initialize internal registry
+    registry_init();
+    // fork the spawn server
+    spawn_init();
+    /*
+     * Libuv uv_spawn() uses SIGCHLD internally:
+     * https://github.com/libuv/libuv/blob/cc51217a317e96510fbb284721d5e6bc2af31e33/src/unix/process.c#L485
+     * and inadvertently replaces the netdata signal handler which was setup during initialization.
+     * Thusly, we must explicitly restore the signal handler for SIGCHLD.
+     * Warning: extreme care is needed when mixing and matching POSIX and libuv.
+     */
+    signals_restore_SIGCHLD();
+
     // ------------------------------------------------------------------------
     // initialize rrd, registry, health, rrdpush, etc.
 
@@ -1261,11 +1458,31 @@ int main(int argc, char **argv) {
     struct rrdhost_system_info *system_info = calloc(1, sizeof(struct rrdhost_system_info));
     get_system_info(system_info);
 
-    rrd_init(netdata_configured_hostname, system_info);
+    if(rrd_init(netdata_configured_hostname, system_info))
+        fatal("Cannot initialize localhost instance with name '%s'.", netdata_configured_hostname);
+
+    char agent_crash_file[FILENAME_MAX + 1];
+    snprintfz(agent_crash_file, FILENAME_MAX, "%s/.agent_crash", netdata_configured_varlib_dir);
+    int crash_detected = (unlink(agent_crash_file) == 0);
+    int fd = open(agent_crash_file, O_WRONLY | O_CREAT | O_TRUNC, 444);
+    if (fd >= 0)
+        close(fd);
+
+
+    // ------------------------------------------------------------------------
+    // Claim netdata agent to a cloud endpoint
+
+    if (claiming_pending_arguments)
+         claim_agent(claiming_pending_arguments);
+    load_claiming_state();
+
     // ------------------------------------------------------------------------
     // enable log flood protection
 
     error_log_limit_reset();
+
+    // Load host labels
+    reload_host_labels();
 
     // ------------------------------------------------------------------------
     // spawn the threads
@@ -1285,10 +1502,39 @@ int main(int argc, char **argv) {
         else debug(D_SYSTEM, "Not starting thread %s.", st->name);
     }
 
+    // ------------------------------------------------------------------------
+    // Initialize netdata agent command serving from cli and signals
+
+    commands_init();
+
     info("netdata initialization completed. Enjoy real-time performance monitoring!");
     netdata_ready = 1;
 
     send_statistics("START", "-",  "-");
+    if (crash_detected)
+        send_statistics("CRASH", "-", "-");
+
+    // ------------------------------------------------------------------------
+    // Report ACLK build failure
+#ifndef ENABLE_ACLK
+    error("This agent doesn't have ACLK.");
+    char filename[FILENAME_MAX + 1];
+    snprintfz(filename, FILENAME_MAX, "%s/.aclk_report_sent", netdata_configured_varlib_dir);
+    if (netdata_anonymous_statistics_enabled > 0 && access(filename, F_OK)) { // -1 -> not initialized
+        send_statistics("ACLK_DISABLED", "-", "-");
+#ifdef ACLK_NO_LWS
+        send_statistics("BUILD_FAIL_LWS", "-", "-");
+#endif
+#ifdef ACLK_NO_LIBMOSQ
+        send_statistics("BUILD_FAIL_MOSQ", "-", "-");
+#endif
+        int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 444);
+        if (fd == -1)
+            error("Cannot create file '%s'. Please fix this.", filename);
+        else
+            close(fd);
+    }
+#endif
 
     // ------------------------------------------------------------------------
     // unblock signals
